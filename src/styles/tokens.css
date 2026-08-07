@@ -1,0 +1,48 @@
+/**
+ * Design tokens — WL-B, PH-B1.
+ * Single source for: the stage-unit scale, the global type-scale step
+ * (×1.00 / ×1.15 / ×1.30, D-11/§1.4), the measured dark palette (§7.2),
+ * and the base role sizes of the type scale (§1.5), all as CSS custom
+ * properties so every consumer (screens, verification scripts) reads the
+ * same numbers.
+ *
+ * `--stage-unit` is a LENGTH (min of two vw/vh terms), not a bare number —
+ * multiplying a unitless role size by it yields a length directly, no
+ * extra `* 1px` needed. At an exact 1920x1080 viewport, --stage-unit
+ * resolves to exactly 1px, so role sizes equal the table's stage-px
+ * numbers exactly at scale-step 1 — this is what V1 measures.
+ */
+
+:root {
+  --stage-unit: min(100vw / 1920, 100vh / 1080);
+  --scale-step: 1;
+
+  /* Dark theme — measured palette, §7.2. Never #000 / #FFF (TV crush/bloom). */
+  --color-bg: #0E1116;
+  --color-text: #F2F4F7;
+  --color-team-a: #0072B2;
+  --color-team-b: #E69F00;
+  --color-correct: #009E73;
+  --color-wrong: #D55E00;
+
+  /* Type scale base sizes, stage-px, §1.5 — unitless numbers on purpose. */
+  --size-question: 76;
+  --size-question-floor: 56;
+  --size-option: 60;
+  --size-option-floor: 44;
+  --size-option-letter: 48;
+  --size-turn-banner: 56;
+  --size-team-name: 44;
+  --size-score: 72;
+  --size-operator-button: 44;
+  --size-result-word: 96;
+  --size-winner-headline: 120;
+
+  /* Safe area, §1.7 — 5% overscan inset. Layout-fixed: does NOT scale with --scale-step. */
+  --safe-inline: 96;
+  --safe-block: 54;
+}
+
+:root[data-scale='100'] { --scale-step: 1; }
+:root[data-scale='115'] { --scale-step: 1.15; }
+:root[data-scale='130'] { --scale-step: 1.3; }
