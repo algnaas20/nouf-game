@@ -1,0 +1,292 @@
+/**
+ * Stage stylesheet — WL-B, PH-B1. Logical CSS properties only, per the
+ * physical-direction ban list in the RTL investigation report §2.2 (not
+ * repeated here verbatim, so this comment itself does not trip the V10
+ * grep it documents). RTL is set on <html> by markup (WL-D's index.html)
+ * — this file never sets base direction.
+ */
+
+@font-face {
+  font-family: 'Cairo';
+  /* Measured: this single file is a variable font, wght axis 200-1000,
+     already covering 600 and 700 (see worklog-B1.md §0). */
+  src: url('../assets/fonts/cairo-arabic.woff2') format('woff2-variations'),
+       url('../assets/fonts/cairo-arabic.woff2') format('woff2');
+  font-weight: 200 1000;
+  font-style: normal;
+  font-display: block;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  block-size: 100%;
+  margin: 0;
+}
+
+body {
+  background: #000; /* letterbox bars outside the 16:9 canvas only, never stage content */
+}
+
+.stage-root {
+  font-family: 'Cairo', 'SF Arabic', 'Segoe UI', 'Noto Naskh Arabic', 'Noto Sans Arabic', Tahoma, 'Geeza Pro', sans-serif;
+  position: fixed;
+  /* `inset: 0` + `margin: auto` centers a fixed-size box regardless of
+     direction, with no transform and no direction-sensitive left/right —
+     unlike `inset-inline-start: 50%; transform: translate(-50%,-50%)`,
+     which breaks under dir=rtl because inset-inline-start resolves to a
+     *physical* right offset while translate() is always physical (§2.3). */
+  inset: 0;
+  margin: auto;
+  inline-size: calc(1920 * var(--stage-unit));
+  block-size: calc(1080 * var(--stage-unit));
+  background: var(--color-bg);
+  color: var(--color-text);
+  overflow: hidden;
+  letter-spacing: 0;
+}
+
+.stage-root * {
+  letter-spacing: 0;
+}
+
+.stage-safe {
+  position: absolute;
+  inset-block-start: calc(var(--safe-block) * var(--stage-unit));
+  inset-block-end: calc(var(--safe-block) * var(--stage-unit));
+  inset-inline-start: calc(var(--safe-inline) * var(--stage-unit));
+  inset-inline-end: calc(var(--safe-inline) * var(--stage-unit));
+  display: flex;
+  flex-direction: column;
+  gap: calc(24 * var(--stage-unit));
+}
+
+/* ---- Typography roles, §1.5 — exact base sizes, line-heights, zero tracking. ---- */
+
+.type-question {
+  font-size: calc(var(--size-question) * var(--stage-unit) * var(--scale-step));
+  font-weight: 700;
+  /* Measured correction (see worklog-B1.md §0/§V2/§V4): the bundled Cairo
+     variable font's real Arabic vertical metrics (hhea ascent+|descent| =
+     1.874em; canvas actualBoundingBox ink for "بخ" = 1.03em) exceed the
+     §1.5 table's line-height: 1.6, which clipped/false-triggered the
+     auto-shrink loop even for single-line short text. §2.4 of the same
+     report sanctions 1.7-1.8 for this case; measured empirically (a swept
+     1.6-2.2 test against the real font), 1.8 still leaves a ~2px residual
+     scrollHeight>clientHeight gap (deep descenders overshoot the box);
+     1.9 is the first value that fully closes it to exactly 0px. */
+  line-height: 1.9;
+  margin: 0;
+  text-align: start;
+}
+.type-option {
+  font-size: calc(var(--size-option) * var(--stage-unit) * var(--scale-step));
+  font-weight: 600;
+  line-height: 1.5;
+  text-align: start;
+}
+.type-option-letter {
+  font-size: calc(var(--size-option-letter) * var(--stage-unit) * var(--scale-step));
+  font-weight: 700;
+  line-height: 1;
+}
+.type-turn-banner {
+  font-size: calc(var(--size-turn-banner) * var(--stage-unit) * var(--scale-step));
+  font-weight: 700;
+  line-height: 1.4;
+  margin: 0;
+}
+.type-team-name {
+  font-size: calc(var(--size-team-name) * var(--stage-unit) * var(--scale-step));
+  font-weight: 600;
+  line-height: 1.4;
+}
+.type-score {
+  font-size: calc(var(--size-score) * var(--stage-unit) * var(--scale-step));
+  font-weight: 700;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.type-operator-button {
+  font-size: calc(var(--size-operator-button) * var(--stage-unit) * var(--scale-step));
+  font-weight: 700;
+  line-height: 1.4;
+}
+.type-result-word {
+  font-size: calc(var(--size-result-word) * var(--stage-unit) * var(--scale-step));
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 0;
+}
+.type-winner-headline {
+  font-size: calc(var(--size-winner-headline) * var(--stage-unit) * var(--scale-step));
+  font-weight: 700;
+  line-height: 1.3;
+  margin: 0;
+  text-align: center;
+}
+
+/* ---- Header / status strip ---- */
+
+.status-strip {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  block-size: calc(104 * var(--stage-unit));
+}
+.status-team {
+  display: flex;
+  align-items: center;
+  gap: calc(12 * var(--stage-unit));
+}
+.status-team-dot {
+  inline-size: calc(28 * var(--stage-unit));
+  block-size: calc(28 * var(--stage-unit));
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+.status-team-dot.team-a { background: var(--color-team-a); }
+.status-team-dot.team-b { background: var(--color-team-b); }
+
+/* ---- Question area ---- */
+
+.question-area {
+  /* Not `flex: 1 1 auto` — measured (worklog-B1.md §V4 supplementary
+     overlap check): letting this box grow to fill all leftover vertical
+     space and then centering short content inside it pushes long content
+     down far enough to collide with the options grid below, once both the
+     question and the options are simultaneously near their length caps.
+     Sized to its own content plus breathing room instead. */
+  flex: 0 1 auto;
+  display: flex;
+  align-items: center;
+  min-block-size: 0;
+  padding-block: calc(16 * var(--stage-unit));
+}
+.question-text {
+  inline-size: calc(1600 * var(--stage-unit));
+  max-inline-size: 100%;
+  overflow: hidden; /* auto-shrink JS keeps scrollHeight <= clientHeight — V4 */
+}
+
+/* ---- Options ---- */
+
+.options-grid {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: calc(32 * var(--stage-unit));
+}
+.options-grid.stacked {
+  grid-template-columns: 1fr;
+}
+
+.option-card {
+  /* One class, one computed style for all four cards before reveal — §4.9. */
+  display: flex;
+  align-items: center;
+  gap: calc(16 * var(--stage-unit));
+  min-block-size: calc(120 * var(--stage-unit));
+  padding-block: calc(20 * var(--stage-unit));
+  padding-inline: calc(28 * var(--stage-unit));
+  border-radius: calc(16 * var(--stage-unit));
+  border: calc(3 * var(--stage-unit)) solid #2A2F38;
+  background: #171B22;
+  color: var(--color-text);
+  cursor: pointer;
+  /* `font-family` only — never the `font` shorthand: it resets font-size
+     too, and at equal specificity with a `.type-*` role class the later
+     source-order rule wins, silently clobbering the measured type scale
+     (caught by V1: a button read 16px instead of its role's computed
+     size). */
+  font-family: inherit;
+  text-align: start;
+}
+.option-card:focus-visible {
+  outline: calc(3 * var(--stage-unit)) solid var(--color-text);
+  outline-offset: calc(2 * var(--stage-unit));
+}
+
+/* Reveal-only modifiers — applied to the DOM only at/after reveal, never before. */
+.option-card.is-correct {
+  border-color: var(--color-correct);
+}
+.option-card.is-wrong-picked {
+  border-color: var(--color-wrong);
+}
+
+.option-letter-chip {
+  flex: 0 0 auto;
+  inline-size: calc(64 * var(--stage-unit));
+  block-size: calc(64 * var(--stage-unit));
+  border-radius: calc(12 * var(--stage-unit));
+  background: #232833;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.result-banner {
+  display: flex;
+  align-items: center;
+  gap: calc(20 * var(--stage-unit));
+  justify-content: center;
+}
+
+/* ---- Operator bar ---- */
+
+.operator-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  block-size: calc(104 * var(--stage-unit));
+}
+.operator-bar-end {
+  display: flex;
+  gap: calc(32 * var(--stage-unit));
+}
+
+.op-button {
+  min-inline-size: calc(240 * var(--stage-unit));
+  min-block-size: calc(96 * var(--stage-unit));
+  border-radius: calc(12 * var(--stage-unit));
+  border: calc(2 * var(--stage-unit)) solid var(--color-text);
+  background: transparent;
+  color: var(--color-text);
+  /* `font-family` only — never the `font` shorthand: it resets font-size
+     too, and at equal specificity with a `.type-*` role class the later
+     source-order rule wins, silently clobbering the measured type scale
+     (caught by V1: a button read 16px instead of its role's computed
+     size). */
+  font-family: inherit;
+  cursor: pointer;
+  padding-inline: calc(24 * var(--stage-unit));
+}
+.op-button.primary {
+  background: var(--color-text);
+  color: var(--color-bg);
+  border-color: var(--color-text);
+}
+
+/* ---- Undo corner — same corner on every screen (inline-end, block-end). ---- */
+.undo-corner {
+  position: absolute;
+  inset-block-end: calc(var(--safe-block) * var(--stage-unit));
+  inset-inline-end: calc(var(--safe-inline) * var(--stage-unit));
+}
+
+/* ---- Home / winner screens ---- */
+.centered-screen {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(48 * var(--stage-unit));
+  text-align: center;
+}
