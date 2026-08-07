@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Editor test harness — WL-C PH-C1</title>
+  </head>
+  <body>
+    <!--
+      Test-only harness — NOT part of the shipped app. index.html (WL-D-owned,
+      untouched by this line) wires the real mount point later, when WL-B's
+      main.ts imports mountEditor(); this fixture exists solely so PH-C1's
+      acceptance criteria can be proven against a real browser and a real
+      IndexedDB via Playwright (tests/editor/live/persistence-and-quota.ts),
+      without touching index.html or vite.config.ts (both forbidden to WL-C).
+    -->
+    <div id="app"></div>
+    <script type="module">
+      import { createIdbBackend } from '../../../src/storage/idb';
+      import { DraftStore } from '../../../src/editor/draft-store';
+      import { mountEditor } from '../../../src/editor/app';
+
+      // The real IndexedDB-backed store — this is what proves AC1's literal
+      // "reload the page" against real persistence, not a fake.
+      const realBackend = createIdbBackend();
+
+      // A thin, test-only decorator that can force the *next* write to
+      // reject with a simulated QuotaExceededError (AC2). It delegates to
+      // the real backend for everything else, so the persistence path
+      // stays 100% real.
+      let forceNextPutQuotaError = false;
+      window.__forceNextPutQuotaError = () => {
+        forceNextPutQuotaError = true;
+      };
+      const testBackend = {
+        ...realBackend,
+        async putQuestion(question) {
+          if (forceNextPutQuotaError) {
+            forceNextPutQuotaError = false;
+            throw new DOMException('simulated for PH-C1 AC2', 'QuotaExceededError');
+          }
+          return realBackend.putQuestion(question);
+        },
+      };
+
+      const store = new DraftStore({ backend: testBackend });
+      mountEditor(document.getElementById('app'), { store });
+    </script>
+  </body>
+</html>

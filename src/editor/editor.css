@@ -1,0 +1,30 @@
+/**
+ * Minimal editor styling — src/editor/** is mine to style; this is not the
+ * 1920x1080 stage (src/styles/tokens.css, WL-B), so it defines its own
+ * small rules rather than importing stage tokens. The only rule that turns
+ * an implementation prose requirement into something visible: the correct
+ * option row is unmistakably green (WL-C C1 implementation rules — "the
+ * whole row green with a ✓"). #009E73 matches خطة.md's documented "correct"
+ * stage colour (§1.5), reused here deliberately for a consistent
+ * correct=green language across the app, not imported from WL-B's file.
+ */
+
+.option-row.is-correct {
+  background-color: #009e73;
+  color: #ffffff;
+}
+
+.correct-check,
+.correct-answer-label {
+  font-weight: 700;
+}
+
+.ready-badge.is-ready {
+  color: #009e73;
+  font-weight: 700;
+}
+
+.ready-badge.is-not-ready {
+  color: #d55e00;
+  font-weight: 700;
+}
