@@ -1,39 +1,47 @@
 /**
  * `legalEvents(state, ctx)` — the single place the win/exhaustion check
- * runs (non-negotiable: only from `PROGRESSION_APPLIED`), and the single
- * place a question is picked/shuffled for `QUESTION_SHOWN` (D-09.3: never
- * inline in a turn handler).
+ * runs (non-negotiable: only from `PROGRESSION_APPLIED`, delegated to
+ * `rules/progression.ts`), and the single place a question is
+ * picked/shuffled for `QUESTION_SHOWN` (D-09.3: never inline in a turn
+ * handler).
  *
- * `ctx` extends the frozen `GameState` with what the state deliberately does
- * NOT carry: the deck itself and the event log so far. `GameState` only
- * stores `deckHash` (a string) and `usedQuestionIds` — it cannot tell us the
- * deck's *size* (needed to detect exhaustion) or what the last answer's
- * correctness was (needed to build the next `MOVE_APPLIED`). The event log
- * is the only authority for both, which is exactly the point of an
- * append-only log: `ctx.events` is real, load-bearing input here, not a
- * debug convenience.
+ * `TURN_START`, `FINAL_BALANCING_TURN` and `TIEBREAK` all share the same
+ * "show the next question" logic — they differ only in how they were
+ * reached (see `reducer.ts`'s `TURN_PASSED` case, which derives the right
+ * one purely from `positions`/`N`).
  */
 
-import type {
-  AnswerChosenEvent,
-  GameEvent,
-  GameState,
-  Outcome,
-  Question,
-  TeamId,
-} from '../contracts';
+import type { AnswerChosenEvent, GameEvent, GameState } from '../contracts';
+import type { GameContext } from './context';
 import { selectNextQuestion, shuffleOptionOrder } from './select';
+import { resolveProgression } from './rules/progression';
 
-export interface GameContext {
-  deck: readonly Question[];
-  /** The full committed event log so far. `events.length` is the next `seq`. */
-  events: readonly GameEvent[];
-  /** Injectable clock for deterministic tests. Defaults to `Date.now`. */
-  now?: () => number;
-}
+export type { GameContext } from './context';
 
-function otherTeam(team: TeamId): TeamId {
-  return team === 'A' ? 'B' : 'A';
+function showNextQuestion(state: GameState, ctx: GameContext, seq: number, now: () => number): GameEvent[] {
+  const sel = selectNextQuestion(state, ctx.deck);
+  if (!sel) {
+    if (state.stateId === 'TURN_START') {
+      // Structurally unreachable: TURN_PASSED only ever lands on
+      // TURN_START when the exhaustion check already ran and found
+      // unused questions remaining (see rules/progression.ts). Defensive.
+      return [];
+    }
+    // Deck exhausted while a FINAL_BALANCING_TURN or TIEBREAK question was
+    // due. D-09.10 reserves 4 questions precisely so this should not occur
+    // for a green/warn-band deck; declared draw is the documented fallback
+    // (game-systems-expert §5.5: "if no tiebreak question remains → declared draw").
+    return [{ type: 'GAME_ENDED', seq, at: now(), outcome: 'draw' }];
+  }
+  const shuffled = shuffleOptionOrder(sel.rng);
+  const ev: GameEvent = {
+    type: 'QUESTION_SHOWN',
+    seq,
+    at: now(),
+    questionId: sel.questionId,
+    optionOrder: shuffled.order,
+  };
+  return [ev];
 }
 
 export function legalEvents(state: GameState, ctx: GameContext): GameEvent[] {
@@ -47,19 +55,10 @@ export function legalEvents(state: GameState, ctx: GameContext): GameEvent[] {
       // directly; it is never produced here.
       return [];
 
-    case 'TURN_START': {
-      const sel = selectNextQuestion(state, ctx.deck);
-      if (!sel) return [];
-      const shuffled = shuffleOptionOrder(sel.rng);
-      const ev: GameEvent = {
-        type: 'QUESTION_SHOWN',
-        seq,
-        at: now(),
-        questionId: sel.questionId,
-        optionOrder: shuffled.order,
-      };
-      return [ev];
-    }
+    case 'TURN_START':
+    case 'FINAL_BALANCING_TURN':
+    case 'TIEBREAK':
+      return showNextQuestion(state, ctx, seq, now);
 
     case 'QUESTION_SHOWN': {
       if (!state.optionOrder || state.currentQuestionId === null) return [];
@@ -94,24 +93,8 @@ export function legalEvents(state: GameState, ctx: GameContext): GameEvent[] {
       return [ev];
     }
 
-    case 'PROGRESSION_APPLIED': {
-      const idx = state.currentTeam === 'A' ? 0 : 1;
-      // Win check — the only place in the codebase this runs, and only
-      // reachable when stateId is PROGRESSION_APPLIED.
-      if (state.positions[idx] >= state.N) {
-        const outcome: Outcome = state.currentTeam === 'A' ? 'winA' : 'winB';
-        return [{ type: 'GAME_ENDED', seq, at: now(), outcome }];
-      }
-      // Minimal deck-exhaustion resolution (see worklog D1): leader wins,
-      // tie draws. No R-b balancing turn, no decider — that is A2.
-      if (state.usedQuestionIds.length >= ctx.deck.length) {
-        const [posA, posB] = state.positions;
-        const outcome: Outcome = posA === posB ? 'draw' : posA > posB ? 'winA' : 'winB';
-        return [{ type: 'GAME_ENDED', seq, at: now(), outcome }];
-      }
-      const toTeam = otherTeam(state.currentTeam);
-      return [{ type: 'TURN_PASSED', seq, at: now(), toTeam }];
-    }
+    case 'PROGRESSION_APPLIED':
+      return resolveProgression(state, ctx, seq, now);
 
     default:
       return [];

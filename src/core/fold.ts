@@ -20,3 +20,24 @@ export function undo(events: readonly GameEvent[]): { events: GameEvent[]; state
   const popped = events.slice(0, -1);
   return { events: popped, state: fold(popped) };
 }
+
+/**
+ * Commits a candidate event, keyed by `(eventCount, eventType)` —
+ * `event.seq` IS the event count at the moment the candidate was
+ * constructed, so a stale re-dispatch of the same tap (a double-tap
+ * arriving after the first dispatch already advanced the log) carries a
+ * `seq` that no longer matches `events.length` and is silently ignored
+ * instead of being applied a second time. This is deliberately NOT a throw
+ * (unlike a genuinely illegal event, I5) — a double-tap is an ordinary,
+ * expected occurrence on a touch/remote UI, not an error condition.
+ */
+export function commit(
+  events: readonly GameEvent[],
+  event: GameEvent,
+): { events: GameEvent[]; state: GameState; applied: boolean } {
+  if (event.seq !== events.length) {
+    return { events: events.slice(), state: fold(events), applied: false };
+  }
+  const nextEvents = [...events, event];
+  return { events: nextEvents, state: fold(nextEvents), applied: true };
+}

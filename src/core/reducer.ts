@@ -10,8 +10,20 @@
  * (see legal.ts for where the actual win/exhaustion decision is computed).
  */
 
-import type { GameEvent, GameState, MazeCell, TeamId } from '../contracts';
+import type { GameEvent, GameState, MazeCell, StateId, TeamId } from '../contracts';
 import { QUESTION_SHOWN_DRAWS } from './select';
+
+const QUESTION_SHOWN_LEGAL_FROM: readonly StateId[] = [
+  'TURN_START',
+  'FINAL_BALANCING_TURN',
+  'TIEBREAK',
+];
+
+const GAME_ENDED_LEGAL_FROM: readonly StateId[] = [
+  'PROGRESSION_APPLIED',
+  'FINAL_BALANCING_TURN',
+  'TIEBREAK',
+];
 
 export class IllegalTransitionError extends Error {
   constructor(
@@ -91,7 +103,7 @@ export function applyEvent(state: GameState, event: GameEvent): GameState {
     }
 
     case 'QUESTION_SHOWN': {
-      if (state.stateId !== 'TURN_START') {
+      if (!QUESTION_SHOWN_LEGAL_FROM.includes(state.stateId)) {
         throw new IllegalTransitionError(event.type, state.stateId);
       }
       return {
@@ -149,9 +161,20 @@ export function applyEvent(state: GameState, event: GameEvent): GameState {
       if (state.stateId !== 'PROGRESSION_APPLIED') {
         throw new IllegalTransitionError(event.type, state.stateId);
       }
+      // D-09.7/D-09.9: which "waiting for the next question" state we land
+      // on is fully derived from positions/N — no extra field needed.
+      // Both at N: mid-tiebreak. Exactly one at N: the other is owed its
+      // balancing attempt. Neither: ordinary play continues.
+      const bothAtN = state.positions[0] >= state.N && state.positions[1] >= state.N;
+      const oneAtN = (state.positions[0] >= state.N) !== (state.positions[1] >= state.N);
+      const nextStateId: StateId = bothAtN
+        ? 'TIEBREAK'
+        : oneAtN
+          ? 'FINAL_BALANCING_TURN'
+          : 'TURN_START';
       return {
         ...state,
-        stateId: 'TURN_START',
+        stateId: nextStateId,
         currentTeam: event.toTeam,
         currentQuestionId: null,
         optionOrder: null,
@@ -159,7 +182,7 @@ export function applyEvent(state: GameState, event: GameEvent): GameState {
     }
 
     case 'GAME_ENDED': {
-      if (state.stateId !== 'PROGRESSION_APPLIED') {
+      if (!GAME_ENDED_LEGAL_FROM.includes(state.stateId)) {
         throw new IllegalTransitionError(event.type, state.stateId);
       }
       return {
