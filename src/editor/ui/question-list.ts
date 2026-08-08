@@ -110,7 +110,17 @@ export function renderQuestionList(store: DraftStore): HTMLElement {
       previewButton.addEventListener('click', () => {
         const stageQuestion = toStageQuestion(question);
         if (!stageQuestion) return;
-        openStagePreview({ question: stageQuestion });
+        // The resolver `openStagePreview` builds needs the blob already in
+        // hand (it must be synchronous) — fetch it first for image/audio
+        // questions, so the preview shows the author's OWN media, not
+        // whatever the stage component falls back to for an unknown id.
+        const mediaBlobPromise: Promise<Blob | undefined> =
+          stageQuestion.media.kind === 'none'
+            ? Promise.resolve(undefined)
+            : store.getMediaBlob(stageQuestion.media.sha256);
+        void mediaBlobPromise.then((mediaBlob) => {
+          openStagePreview({ question: stageQuestion, mediaBlob });
+        });
       });
 
       const upButton = document.createElement('button');

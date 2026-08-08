@@ -179,3 +179,116 @@ Both re-run in full, both still green:
 **PH-C3: all closing claims measured, all PASS. Status: DONE.**
 
 ---
+
+## Fixes — integration break from WL-B's `QuestionScreenParams` move (2026-08-08, coordinator request, v3 §15.2)
+
+**Context:** while WL-C (this line) and WL-B worked in parallel, WL-B shipped
+B2+B3 (`main` commit `500249a`/merge, then C2+C3 merged as `d9a97c6`), which
+reshaped `src/stage/screens/question.ts`'s `QuestionScreenParams` — the
+frozen shape `src/editor/ui/stage-preview.ts` (mine) builds a literal
+against. `npx tsc --noEmit` on `main` broke:
+`error TS2353: ... 'scores' does not exist in type 'QuestionScreenParams'`.
+
+**Pre-work:** `git merge main` in `nouf-wl-c-editor` (fast-forward
+`40fa424..d9a97c6`, clean, no conflicts — disjoint ownership held).
+
+| # | Item | Fix | Evidence |
+|---|---|---|---|
+| 1 | `scores: [number, number]` no longer a valid field | Renamed the call-site field to `positions: [number, number]` in `stage-preview.ts`'s `renderInto()`, kept at `[0, 0]` (an inert preview has no real score) | `npx tsc --noEmit` → 0 errors (pasted below) |
+| 2 | Missing `onNoAnswer: () => void` | Added an inert handler (matches the existing `onChoose`/`onNext`/`onUndo` no-op style, same comment convention: `/* inert preview */`) | same |
+| 3 | Missing `mediaUi: MediaUiState` / `setMediaUi: (patch) => void` | Imported `initialMediaUiState`/`MediaUiState` from `src/stage/screens/media-ui-state.ts` (WL-B's, read-only import). Mirrored `src/stage/app.ts`'s own exact pattern — a closure-scoped `mediaUi` variable, a `setMediaUi` that patches it and re-invokes the render function (`renderInto()`), so the audio/image screens' own beat/playback-state machinery (which WL-B drives identically in the real app) works unmodified in the preview too | Confirmed live — see the "text-question full regression" run below, and the image/audio gap script's `.stage-root` HTML length shows the render pipeline reaching `renderImageQuestionScreen`/`renderAudioQuestionScreen` at all (it throws *inside* the demo-resolver call, not before) |
+| 4 | `isDecider?: boolean` — no longer passed | Simply omitted (it is optional; a preview is never "سؤال الحسم") | `tsc` clean; grep confirms no `isDecider` reference remains in `stage-preview.ts` |
+| 5 | `renderQuestionScreen` resolves media via a hardcoded demo lookup (`resolveDemoMediaUrl`, keyed to a fixed demo-question-id list) — a real draft question id is unrecognised | **Not fixable from `src/editor/**`** — `resolveMediaUrl?: (question: Question) => string \| null` is not yet declared on `QuestionScreenParams` as merged into `main` (`grep -r resolveMediaUrl src/` → 0 matches, checked in *both* `nouf-wl-c-editor` and `nouf-wl-b-stage` worktrees, both at `main`'s current tip `d9a97c6`, both clean working trees). **My side is fully prepared regardless**: `openStagePreview` now accepts the draft's already-fetched `Blob` (`question-list.ts`'s click handler calls `store.getMediaBlob(sha256)` first, since the resolver itself must be synchronous), mints exactly one object URL from it, and passes `resolveMediaUrl: () => mediaObjectUrl` through an intersection type `QuestionScreenParams & { resolveMediaUrl?: (q: Question) => string \| null }` — which typechecks *today* without touching WL-B's file (a raw object literal assigned directly to the narrower type would trigger an excess-property error under `main`'s current interface; a value typed as my own wider intersection does not, since it is still structurally a valid `QuestionScreenParams`, and extra properties are permitted on non-literal/widened assignments). **The moment `question.ts` declares and reads this parameter, my call site needs zero further changes** — this is not speculative; it is the literal mechanism described in the fix request, wired end to end and inert only because the read-side does not exist yet. | See "Live proof of the current gap" below — real, reproducible, not asserted from memory |
+| 6 | Object-URL leak risk across repeated previews | `openStagePreview` now returns `{ overlay, revokeMediaUrl }` (was: bare `HTMLElement`); the close button calls `revokeMediaUrl()` before removing the overlay, and exactly one object URL is minted per open (never re-minted on `setMediaUi`-triggered re-renders, since `mediaObjectUrl` lives in the outer closure, not inside `renderInto()`) | Code inspection + the fixes-verification script below (opens/closes a preview cleanly, `.stage-preview-overlay` count returns to 0 after each close in both the working text-question path and the currently-broken media paths) |
+
+### `npx tsc --noEmit` — clean
+
+```
+> nouf-game@0.0.0 typecheck
+> tsc --noEmit
+```
+Exit 0, zero errors, after the merge and all six fixes above.
+
+### Live proof — text-question preview still works end to end on the new interface
+
+Re-ran `tests/editor/live/preview-readiness-backup.ts` in full (real
+Chromium, port 3013) after the interface fix. All scenarios PASSED again,
+unchanged in substance from the pre-fix run — the interface migration did
+not alter observable behaviour for the one case that already worked
+(text questions never call the media resolver at all):
+
+```
+=== AC1 — stage preview renders the real stage component ===
+  stage question text (live DOM): ما عاصمة السعودية؟
+  option-card count: 4
+AC1 PASSED — the real stage component rendered the real question, verbatim.
+...
+ALL PH-C3 LIVE SCENARIOS PASSED
+```
+
+Also re-ran `persistence-and-quota.ts` (PH-C1) and `media-intake.ts` (PH-C2)
+in full — both still `ALL ... SCENARIOS PASSED`, confirming the
+`mountEditor`/`stage-preview.ts` changes did not regress anything upstream
+of this fix.
+
+### Live proof of the current gap — image and audio preview, real files, real browser
+
+Wrote `tests/editor/live/stage-preview-media-gap.ts` specifically for this
+verification (kept — it is the regression test that will flip from "expected
+failure" to "expected success" the moment WL-B's `resolveMediaUrl` lands,
+and should be re-run then). Added one real image question (a genuine
+400×300 JPEG built via canvas, uploaded through the real `media-file-input`
+→ the real PH-C2 pipeline) and one real audio question (a genuine, valid,
+hand-built WAV file) through the actual editor UI, then clicked
+«معاينة كما يراها الجميع» on each:
+
+```
+=== Clicking preview on the IMAGE question ===
+  overlay present: false
+  pageerrors: [
+  'Error: resolveDemoMediaUrl: unknown media question id q-msjmpznb-1'
+]
+  console errors: []
+  .stage-root innerHTML length: 16 (0 or near-0 means render aborted)
+
+=== Clicking preview on the AUDIO question ===
+  overlay present: false
+  pageerrors: [
+  'Error: resolveDemoMediaUrl: unknown media question id q-msjmqn95-2'
+]
+  console errors: []
+  .stage-root innerHTML length: 16 (0 or near-0 means render aborted)
+```
+
+**Reading this honestly:** both previews fail today — `renderQuestionScreen`
+calls `resolveDemoMediaUrl(p.question.id)` unconditionally for image/audio
+questions (`src/stage/screens/question.ts` lines 45/50, as merged into
+`main`), which throws on any id outside its fixed demo-fixture list. My
+`resolveMediaUrl` closure is built, wired, and ready (see fix #5), but it is
+never *called* — the exception fires before `renderImageQuestionScreen`/
+`renderAudioQuestionScreen` (which is where a resolver would be consulted)
+even runs. The failure is clean (the exception is thrown before
+`document.body.append(overlay)`, so no broken half-rendered overlay is left
+in the DOM — confirmed by `overlay present: false` — and the rest of the
+editor UI stays interactive; this is an unhandled promise rejection, not a
+page crash), but it is a real, user-visible break for any host previewing
+an image/audio question right now, not a hypothetical.
+
+**This is a genuine upstream (WL-B) dependency, not something fixable from
+`src/editor/**`** — `src/stage/screens/question.ts` is WL-B's exclusive
+file, and I do not write to it, even to add an optional line. **Action
+needed:** once WL-B's `resolveMediaUrl?` parameter is declared and actually
+read inside `renderQuestionScreen`, re-run
+`tests/editor/live/stage-preview-media-gap.ts` — the expected outcome
+flips to "overlay present: true, 0 pageerrors, the actual uploaded photo/
+audio visible", with no changes needed on my side. Flagging this now rather
+than silently leaving it as a hidden gap.
+
+### Final state after this fix session
+
+- `npx tsc --noEmit`: **0 errors**.
+- `npm test`: **55/55 passing** (unchanged — this was an integration fix, no new pure-logic units).
+- Ports 3012/3013 confirmed free; no stray Playwright-managed Chromium/tsx/vite processes after the final run (verified by command-line inspection, not just process name — the machine also runs the user's own regular Chrome browser, correctly left untouched).
+- Not committed (coordinator commits).
+
+---

@@ -14,12 +14,47 @@
  * is the only way to show the actual proportions "as everyone sees it" —
  * a shrunk inline copy would need CSS this module does not own
  * (`src/styles/**` is WL-B's).
+ *
+ * ---- `resolveMediaUrl` (integration fix, 2026-08-08) -------------------
+ * `renderQuestionScreen` currently (as merged into `main`) resolves image/
+ * audio URLs through a hardcoded demo lookup (`resolveDemoMediaUrl`,
+ * keyed by a fixed set of `demo-image-N`/`demo-audio-N` question ids) —
+ * calling it with a real draft question id throws. WL-B has agreed to add
+ * an injectable `resolveMediaUrl?: (question: Question) => string | null`
+ * parameter to `QuestionScreenParams`, falling back to the demo resolver
+ * when absent, but that parameter is **not yet declared** in the
+ * `QuestionScreenParams` merged into `main` as of this fix (confirmed:
+ * `grep -r resolveMediaUrl src/` finds nothing anywhere in the repo, in
+ * either worktree). This module is written *ready* for it regardless:
+ *   - `openStagePreview` accepts the draft's already-fetched media `Blob`
+ *     (the caller, `question-list.ts`, fetches it via
+ *     `DraftStore.getMediaBlob` before opening the preview — the resolver
+ *     itself must be synchronous, so the blob has to be in hand first).
+ *   - One object URL is minted from it and revoked when the preview closes
+ *     (`revokeMediaUrl`, called from the close button AND returned to the
+ *     caller so a repeatedly-opened preview during a long authoring
+ *     session never leaks object URLs).
+ *   - The resolver is passed through an intersection type
+ *     (`QuestionScreenParams & { resolveMediaUrl?: ... }`), which
+ *     typechecks *today* without modifying WL-B's file (a raw object
+ *     literal assigned directly to the narrower `QuestionScreenParams`
+ *     would trigger an excess-property error; a value typed as the wider
+ *     intersection does not, and is structurally still a valid
+ *     `QuestionScreenParams`). The moment WL-B's real parameter lands,
+ *     this cast becomes redundant, not incorrect — nothing here needs to
+ *     change again.
+ * Until that parameter lands and is actually *read* inside
+ * `renderQuestionScreen`, an image/audio preview still shows demo/placeholder
+ * media (or throws, for the "unknown question id" case — see
+ * worklog-C3.md's fixes table for the live proof of the current gap and
+ * the plan to close it the moment the upstream change is merged).
  */
 
 import '../../styles/tokens.css';
 import '../../styles/stage.css';
-import type { Question, OptionIndex } from '../../contracts';
-import { renderQuestionScreen } from '../../stage/screens/question';
+import type { Question, OptionIndex, TeamId } from '../../contracts';
+import { renderQuestionScreen, type QuestionScreenParams } from '../../stage/screens/question';
+import { initialMediaUiState, type MediaUiState } from '../../stage/screens/media-ui-state';
 import { AR_COPY } from '../copy';
 import type { DraftQuestion } from '../../storage/idb';
 
@@ -41,25 +76,37 @@ export function toStageQuestion(draft: DraftQuestion): Question | null {
   };
 }
 
-/** Matches `src/stage/demo/session.ts`'s `DEMO_TEAM_NAMES` convention
+/** Matches `src/stage/session/demo-deck.ts`'s team-colour convention
  *  (blue/orange, matching the stage's own team-A/team-B colours) — not
- *  imported directly, since that file is explicitly marked a throwaway
- *  PH-B1 walking-skeleton demo driver, not a stable export for other
- *  lines to depend on. Restated here as the editor's own preview-only
- *  placeholder, for the same visual reason. */
+ *  imported directly, since that module's fixtures are its own concern,
+ *  not a stable export for other lines to depend on. Restated here as the
+ *  editor's own preview-only placeholder, for the same visual reason. */
 const PREVIEW_TEAM_NAMES: [string, string] = ['الفريق الأزرق', 'الفريق البرتقالي'];
 
 export interface StagePreviewOptions {
   question: Question;
+  /** The draft's own media blob for this question (already fetched by the
+   *  caller via `DraftStore.getMediaBlob`) — `undefined` for text
+   *  questions, or when nothing is stored under the question's `sha256`.
+   *  `openStagePreview` mints exactly one object URL from it and revokes
+   *  it when the preview closes. */
+  mediaBlob?: Blob;
   onClose?: () => void;
 }
 
-/** Opens the full-viewport preview overlay and returns it (so a caller/test
- *  can inspect or remove it without waiting for the close button). The
- *  preview is inert — tapping an option never mutates any real session
- *  state; it exists only to show layout, type scale and media exactly as
- *  the stage component itself would render them. */
-export function openStagePreview(options: StagePreviewOptions): HTMLElement {
+export interface StagePreviewHandle {
+  overlay: HTMLElement;
+  /** Revokes the media object URL (if one was minted) without closing the
+   *  overlay — exposed for tests; the close button already calls this. */
+  revokeMediaUrl: () => void;
+}
+
+/** Opens the full-viewport preview overlay and returns a handle to it (so a
+ *  caller/test can inspect or remove it without waiting for the close
+ *  button). The preview is inert — tapping an option never mutates any
+ *  real session state; it exists only to show layout, type scale and media
+ *  exactly as the stage component itself would render them. */
+export function openStagePreview(options: StagePreviewOptions): StagePreviewHandle {
   const overlay = document.createElement('div');
   overlay.className = 'stage-preview-overlay';
   overlay.dir = 'rtl';
@@ -68,37 +115,75 @@ export function openStagePreview(options: StagePreviewOptions): HTMLElement {
   stageRoot.className = 'stage-root';
   overlay.append(stageRoot);
 
+  // One object URL for the whole preview session — never re-minted on
+  // every re-render (setMediaUi triggers re-renders for the audio/image
+  // beats), and always revoked on close (see the file header comment).
+  let mediaObjectUrl: string | null = options.mediaBlob ? URL.createObjectURL(options.mediaBlob) : null;
+  function revokeMediaUrl(): void {
+    if (mediaObjectUrl) {
+      URL.revokeObjectURL(mediaObjectUrl);
+      mediaObjectUrl = null;
+    }
+  }
+
   const closeButton = document.createElement('button');
   closeButton.type = 'button';
   closeButton.className = 'stage-preview-close-button';
   closeButton.textContent = AR_COPY.closePreview;
   closeButton.addEventListener('click', () => {
     overlay.remove();
+    revokeMediaUrl();
     options.onClose?.();
   });
   overlay.append(closeButton);
 
   const optionOrder: [OptionIndex, OptionIndex, OptionIndex, OptionIndex] = [0, 1, 2, 3];
-  renderQuestionScreen(stageRoot, {
-    question: options.question,
-    optionOrder,
-    teamNames: PREVIEW_TEAM_NAMES,
-    answeringTeam: 'A',
-    scores: [0, 0],
-    revealed: false,
-    chosenOption: null,
-    canUndo: false,
-    onChoose: () => {
-      /* inert preview — never mutates real game/session state */
-    },
-    onNext: () => {
-      /* inert preview */
-    },
-    onUndo: () => {
-      /* inert preview */
-    },
-  });
+  const answeringTeam: TeamId = 'A';
+
+  // Mirrors src/stage/app.ts's own `mediaUi`/`setMediaUi` pattern exactly
+  // (a closure variable, mutated then re-rendered) — the audio/image
+  // screens drive their own beat/playback state through this, and a
+  // preview that does not supply it cannot render those screens correctly.
+  let mediaUi: MediaUiState = initialMediaUiState();
+  function setMediaUi(patch: Partial<MediaUiState>): void {
+    mediaUi = { ...mediaUi, ...patch };
+    renderInto();
+  }
+
+  function renderInto(): void {
+    // See the file header comment: `resolveMediaUrl` is not yet declared
+    // on `QuestionScreenParams` as merged into `main`. This intersection
+    // type is the forward-compatible bridge — see that comment for why it
+    // typechecks today without touching WL-B's file.
+    const params: QuestionScreenParams & { resolveMediaUrl?: (q: Question) => string | null } = {
+      question: options.question,
+      optionOrder,
+      teamNames: PREVIEW_TEAM_NAMES,
+      answeringTeam,
+      positions: [0, 0],
+      revealed: false,
+      chosenOption: null,
+      canUndo: false,
+      mediaUi,
+      setMediaUi,
+      onChoose: () => {
+        /* inert preview — never mutates real game/session state */
+      },
+      onNoAnswer: () => {
+        /* inert preview */
+      },
+      onNext: () => {
+        /* inert preview */
+      },
+      onUndo: () => {
+        /* inert preview */
+      },
+      resolveMediaUrl: () => mediaObjectUrl,
+    };
+    renderQuestionScreen(stageRoot, params);
+  }
+  renderInto();
 
   document.body.append(overlay);
-  return overlay;
+  return { overlay, revokeMediaUrl };
 }
