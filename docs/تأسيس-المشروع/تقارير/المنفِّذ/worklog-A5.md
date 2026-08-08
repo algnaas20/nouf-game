@@ -265,3 +265,32 @@ Runtime: 156010 ms
 - `route-tap-target-unverified` (report's own debt) — WL-B/visual verifier's, still open.
 - I15 — genuinely not WL-A's to discharge; the report itself says so.
 - G9's relationship to R-b (see §7.2 protocol note) — not measured, and I now believe it may not be cleanly measurable without either censoring bias or abandoning "a full game" as the unit of measurement; flagged rather than forced.
+
+---
+
+## 8. Fixes/additions — addendum-deck-floor-2026-08-08 (v3 §15.2)
+
+**Accepted after commit `6256d77`.** `play-experience-advisor`'s `docs/تأسيس-المشروع/تقارير/play-experience-advisor/addendum-deck-floor-2026-08-08.md` (D-09.12′/D-09.13′/D-09.21/D-09.24) — a live user was refused at 12 questions with no number shown, guessed his way to 14, and the `N→N+1` shift I shipped in A5 would have refused him a SECOND time (N=6's floor moves 14→16). Core half implemented; copy/UI is WL-B/WL-C's per the report's own file list.
+
+| # | Change | File | Verification |
+|---|---|---|---|
+| 1 | New preset «سريعة» at N=4. `PRESETS` (now exported) = `[4, 6, 10, 14]`. Threshold formulas untouched, as the ruling insists — only the floor moved. | `src/core/rules/deck-bands.ts` | `tests/core/rules/progression.test.ts`: N=4 refuse<12/green@21 matches the addendum's own worked table exactly; red→green via a `PRESETS=[6,10,14]` regression mutation (4 tests failed, incl. the field-evidence and migration-guard cases) |
+| 2 | `preselectTrackLength` — **zero logic change**, exactly as the ruling specifies; adding 4 to `PRESETS` alone fixes the fallback (a thin deck now falls back to N=4, which it can finish, instead of N=6, which the field evidence shows it cannot) | `src/core/rules/deck-bands.ts` | `preselectTrackLength(10)` now `4` (was `6`); `preselectTrackLength(12)` (the exact field-evidence deck size) is `4`, not refused |
+| 3 | New exported functions `questionsNeededForPlayable(D, N)` / `questionsNeededForComfortable(D, N)` — both derived from the SAME `greenThresholdRaw`/`refuseThresholdRaw` `deckBand` itself compares against, via `Math.ceil`, so a UI message built from them can never fail to flip the band (D-09.24's explicit failure mode: "add 9 and the ninth doesn't do it") | `src/core/rules/deck-bands.ts` | New test: for every preset × D∈[0,60], `deckBand(D + needed, N)` always flips as promised, and `D + needed - 1` never does. Red→green: `Math.ceil→Math.floor` mutation caught by 3 tests including the addendum's own worked examples (D=9,N=4→needs 3/12; D=14,N=4→needs 0/7) |
+| 4 | Harness re-run at N=4 — **verified, not assumed** | `tools/sim/run.ts` (`S12`, `G9`, `S-EMPTY` extended to include N=4; new `S-N4` scenario — real gameplay, not just isolated mechanics) | Full 85,800-game run: **G9 (N=4): observed E[wasted]=0.8064 vs the advisor's cited P(stumble)=0.80** (exact formula 0.8025, diff 0.0039); **S-N4 (3,000 real games): P(first team wins)=0.4990**, inside [0.48,0.52] — both real numbers pasted in `docs/بروتوكولات/simulated-playthrough.md`'s updated real-output block |
+
+**Full verification after all four changes:**
+- `npx tsc --noEmit`: still exactly the one pre-existing WL-B error (`game-driver.ts`), zero new errors.
+- `npx vitest run`: **23 files, 127 tests, all passed** (was 119; +8 new tests for this addendum).
+- `npx tsx tools/sim/main.ts` (`NODE_OPTIONS=--max-old-space-size=6144`): **85,800 games, 0 failures**, runtime 172,659 ms. Full output pasted into `docs/بروتوكولات/simulated-playthrough.md`.
+
+**Red→green, this round (both proven, reverted, confirmed green again — same discipline as §5):**
+
+| Guard | Mutation | RED evidence |
+|---|---|---|
+| D-09.24 (`questionsNeededForComfortable`) | `Math.ceil` → `Math.floor` | 3 tests failed: the "never lies" sweep test, and both of the addendum's own worked examples (D=9/N=4 expected 12, got 11; D=14/N=4 expected 7, got 6) |
+| D-09.12′ (`PRESETS`) | Reverted to `[6, 10, 14]` (the pre-addendum floor) | 4 tests failed: `preselectTrackLength` self-consistency, the `PRESETS` literal check, the field-evidence-user test (12→N=6 not N=4), and the migration-guard test |
+
+**Out of scope, not touched (per the report's own file list, all WL-B/WL-C):** `src/editor/copy.ts`, `src/editor/ui/readiness-meter.ts`, `src/stage/screens/team-setup.ts`, `src/stage/screens/home.ts` — the literal Arabic strings (§ the addendum's "Refuse/Warn/Green/Unlock nudge/Chip subline/Editor readiness meter" sections), the count-agreement helper (`phrase(n)`), the «محطات» vs «خطوات» vocabulary fix (D-09.26), and the §6.3 win-copy replacement (D-09.27) are all copy/UI work for WL-B and WL-C to consume `questionsNeededForPlayable`/`questionsNeededForComfortable`/`PRESETS` with.
+
+**One observation, flagged not fixed (found while checking for existing consumers before editing):** `src/editor/ui/readiness-meter.ts` (WL-C-owned) has code comments citing pre-redesign threshold values (`greenThreshold = 3.34*10+4 = 37.4`, i.e. the OLD `N` formula, not A5's `N+1`). The live `deckBand(...)` call itself is unaffected (it calls the real, already-updated function, so behaviour is correct) — only the file's own comments are stale, predating A5. Not fixed: out of scope (WL-C's file), and not urgent (no behavioural bug, purely a stale comment).

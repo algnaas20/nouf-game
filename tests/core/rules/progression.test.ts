@@ -9,7 +9,14 @@ import type { AnswerChosenEvent, GameEvent, GameState, Question, TeamId } from '
 import { applyEvent } from '../../../src/core/reducer';
 import { fold, undo, commit } from '../../../src/core/fold';
 import { legalEvents, type GameContext } from '../../../src/core/legal';
-import { deckBand, maxGreenTrackLength, preselectTrackLength } from '../../../src/core/rules/deck-bands';
+import {
+  deckBand,
+  maxGreenTrackLength,
+  preselectTrackLength,
+  questionsNeededForPlayable,
+  questionsNeededForComfortable,
+  PRESETS,
+} from '../../../src/core/rules/deck-bands';
 import { MAZE_GEN_VERSION } from '../../../src/core/rules/maze';
 
 function generateDeck(n: number): Question[] {
@@ -129,7 +136,79 @@ describe('PH-A2 — deck-size bands (D-09.13), restated by game-systems-expert �
     // D=55 is green at N=6, N=10 AND N=14 under the new formula — capping at
     // 10 must still win even though 14 would also qualify.
     expect(preselectTrackLength(55)).toBe(10);
-    expect(preselectTrackLength(10)).toBe(6); // refuse everywhere; falls back to the smallest preset
+    // D-09.12′ (addendum-deck-floor-2026-08-08): refuse everywhere (even at
+    // the new N=4 floor — refuseThreshold(4)=12 > 10) — falls back to the
+    // SMALLEST preset, which is now 4, not 6. Before the addendum this
+    // returned 6, a track a 10-question deck could not actually finish
+    // (E[moves] at N=6 needs ~7 correct answers per team, ~14 total — 10
+    // falls short); the field evidence is exactly this failure mode.
+    expect(preselectTrackLength(10)).toBe(4);
+  });
+});
+
+describe('D-09.12′/D-09.21 — addendum-deck-floor-2026-08-08: the N=4 «سريعة» preset and the two "questions needed" numbers', () => {
+  it('PRESETS is 4/6/10/14, «سريعة» present and smallest', () => {
+    expect(PRESETS).toEqual([4, 6, 10, 14]);
+  });
+
+  it('N=4: refuse below 12, green at 21 — the addendum\'s own worked table', () => {
+    // greenThreshold(4) = 3.34*(4+1)+4 = 20.7 -> ceil 21 ; refuseThreshold(4) = 2*(4+1)+2 = 12
+    const results = [11, 12, 20, 21].map((D) => deckBand(D, 4));
+    // eslint-disable-next-line no-console
+    console.log(`[addendum N=4] D=11→${results[0]}, D=12→${results[1]}, D=20→${results[2]}, D=21→${results[3]}`);
+    expect(results).toEqual(['refuse', 'warn', 'warn', 'green']);
+  });
+
+  it('the field-evidence user (12 questions) is playable at N=4, and was refused pre-addendum', () => {
+    expect(deckBand(12, 4)).not.toBe('refuse');
+    expect(preselectTrackLength(12)).toBe(4);
+  });
+
+  it('the migration guard: a 14-question deck stays playable at N=6 through the N->N+1 shift', () => {
+    // refuseThreshold(6) = 2*(6+1)+2 = 16 under the new formula — 14 alone
+    // would now be refused at N=6 (the addendum's exact regression). The
+    // guard is that he is NOT stuck: N=4 is playable (refuseThreshold(4)=12).
+    expect(deckBand(14, 6)).toBe('refuse');
+    expect(deckBand(14, 4)).not.toBe('refuse');
+    expect(preselectTrackLength(14)).toBe(4);
+  });
+
+  it('questionsNeededForPlayable/Comfortable: D-09.24 — "add X more" always actually flips the band (never a lying message)', () => {
+    for (const N of PRESETS) {
+      for (let D = 0; D <= 60; D++) {
+        const neededPlayable = questionsNeededForPlayable(D, N);
+        const bandAfterPlayable = deckBand(D + neededPlayable, N);
+        expect(bandAfterPlayable).not.toBe('refuse');
+        // The message must never over-promise either: one question short of
+        // "needed" must still be refuse (unless already playable, needed=0).
+        if (neededPlayable > 0) {
+          expect(deckBand(D + neededPlayable - 1, N)).toBe('refuse');
+        }
+
+        const neededComfortable = questionsNeededForComfortable(D, N);
+        const bandAfterComfortable = deckBand(D + neededComfortable, N);
+        expect(bandAfterComfortable).toBe('green');
+        if (neededComfortable > 0) {
+          expect(deckBand(D + neededComfortable - 1, N)).not.toBe('green');
+        }
+      }
+    }
+  });
+
+  it('worked example from the addendum: D=9, N=4 -> needs 3 more to play, 12 more to be comfortable', () => {
+    expect(questionsNeededForPlayable(9, 4)).toBe(3); // 12 - 9
+    expect(questionsNeededForComfortable(9, 4)).toBe(12); // 21 - 9
+  });
+
+  it('worked example from the addendum: D=14, N=4 (warn) -> needs 7 more to be comfortable', () => {
+    expect(deckBand(14, 4)).toBe('warn');
+    expect(questionsNeededForPlayable(14, 4)).toBe(0); // already playable
+    expect(questionsNeededForComfortable(14, 4)).toBe(7); // 21 - 14
+  });
+
+  it('never negative once already at or past the target', () => {
+    expect(questionsNeededForPlayable(100, 14)).toBe(0);
+    expect(questionsNeededForComfortable(100, 14)).toBe(0);
   });
 });
 

@@ -62,8 +62,8 @@ describe('PH-A3/A5 smoke: I1–I14 hold, G1/G3/G7\'/G8 hold, over a small sample
     checkG3(1, states[states.length - 1]!);
   });
 
-  it("G7': generator structure (junction counts, exits, no shared junctions) holds for 100 seeds x 3 presets", () => {
-    for (const N of [6, 10, 14]) {
+  it("G7': generator structure (junction counts, exits, no shared junctions) holds for 100 seeds x 4 presets", () => {
+    for (const N of [4, 6, 10, 14]) {
       for (let seed = 1; seed <= 100; seed++) {
         checkGeneratorStructure(seed, N);
       }

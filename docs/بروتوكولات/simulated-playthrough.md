@@ -2,6 +2,7 @@
 
 **المالك:** WL-A (النواة) · **تاريخ الكتابة:** 2026-08-07، بعد أول تشغيل حقيقي للمِشْحَنة (PH-A3) — لا قبل ذلك (v3 §8).
 **محدَّث:** 2026-08-08 (PH-A5, maze redesign — branching maze, one-stumble rule, I11–I15, G7′/G8/G9, route policies). كل رقم في هذا التحديث ملصوق من تشغيل حقيقي `npx tsx tools/sim/main.ts` بعد الإعادة، لا قبلها.
+**محدَّث ثانيةً:** 2026-08-08 (addendum-deck-floor-2026-08-08, `play-experience-advisor`) — preset «سريعة» (N=4) added; `S12`/`G9`/`S-EMPTY` extended to 4 presets; new `S-N4` scenario re-measures P(first team wins) with REAL gameplay at N=4 (not just the isolated `walkFullRoute`/structural checks). See `worklog-A5.md`'s appended fixes/additions table.
 **اللغة:** إنجليزية للتفاصيل التقنية (جمهورها الوكلاء)؛ هذا السطر فقط عربي للفهرسة.
 
 **Debts discharged:** `simulated-playthrough-protocol-owed` (original, PH-A3) and its A5 re-open (game-systems-expert 2026-08-08 §11.6: "now overdue — the harness exists and has run... must be written by whoever runs the extended harness, with real output pasted in").
@@ -45,25 +46,26 @@ There is no build step required — `tsx` transforms TypeScript on the fly (the 
 | S3 | A always correct, B always wrong, `uniformRoute` | 1,000 | D=30 | 10 | Maximum blowout; win detection at the extreme |
 | S4 | Strict alternating correct/wrong, per team, `uniformRoute` | 1,000 | D=40 | 10 | Turn-swap correctness under a regular pattern |
 | S5/S10 | Uniform random at p ∈ {0.1…0.9}, `uniformRoute` (worst case) | 9 × 1,000 = 9,000 | D=40 | 10 | Fairness distribution; the empirical P(first team wins); S10 IS S5 once combined with `uniformRoute` — same infra |
+| S-N4 | Uniform random p=0.7, `uniformRoute` — REAL gameplay at N=4 «سريعة» | 3,000 | D=30 | 4 | addendum-deck-floor-2026-08-08: re-measures P(first team wins) at the new preset with a real played-out game (not just the isolated `walkFullRoute`/structural checks) — a real asserted guard, [0.48,0.52] |
 | S11 | `oracleRoute` (team A, never stumbles) vs `uniformRoute` (team B, worst case) | 5,000 | D=40 | 10 | Maximum possible route-luck asymmetry — honest cost report, NOT a fairness violation (G8 still checked, still 0) |
-| S12 | No gameplay — generator sweep | 30,000 (10,000 seeds × 3 presets) | — | 6/10/14 | G7′ structural assertions: junction counts, exit ranges, M-GEN-1 (no shared junction objects) |
+| S12 | No gameplay — generator sweep | 40,000 (10,000 seeds × 4 presets) | — | 4/6/10/14 | G7′ structural assertions: junction counts, exit ranges, M-GEN-1 (no shared junction objects) |
 | G4-dedicated | Uniform random p=0.7, `uniformRoute` | 10,000 | D=40 | 10 | Dedicated large sample for the G4 headline figure — now a REAL asserted guard (throws outside [0.48,0.52]), re-measured under the new maze model |
 | S6 | Tie-forcing (always correct, fresh seeds, `uniformRoute`) | 1,000 | D=40 | 10 | The tiebreak state and the `draw` outcome path — loosened assertion (≥90%, see finding below) |
 | S7 | Adversarial max-length (always wrong) | 1,000 | D=50 | 14 | Termination bound (G1), stressed at the largest preset |
 | S8/S13 | Undo fuzz (random legal events + undo at every step; dead-end discovery undo explicitly re-checked) | 1,000 | D=25 | 10 | Undo correctness incl. `closedExits`/`wasted` restoration (G6, extended) |
 | S9 | Refresh fuzz (serialize+deserialize every step) | 1,000 | D=25 | 10 | Persistence round-trip; resume matches an uninterrupted run |
-| S-EMPTY | Zero-question deck | 600 (3 presets × 200 seeds) | D=0 | 6/10/14 | F-2 regression: reaches FINISHED/draw at the first TURN_START, never freezes |
+| S-EMPTY | Zero-question deck | 800 (4 presets × 200 seeds) | D=0 | 4/6/10/14 | F-2 regression: reaches FINISHED/draw at the first TURN_START, never freezes |
 
-**G9** (E[wasted] per team vs. `1-(2/3)^N`, all 3 presets) is measured OUTSIDE the game-playing scenarios above, by `walkFullRoute` — see the finding below for why.
+**G9** (E[wasted] per team vs. `1-(2/3)^N`, all 4 presets incl. N=4) is measured OUTSIDE the game-playing scenarios above, by `walkFullRoute` — see the finding below for why.
 
-**Total this run: 72,600 games** (up from PH-A3's 27,000 — see the runtime/heap note above for what that costs).
+**Total this run: 85,800 games** (up from PH-A3's 27,000, and PH-A5's original 72,600 — the addendum-deck-floor-2026-08-08 preset-4 additions to S12/G9/S-EMPTY plus the new S-N4 scenario account for the difference; see the runtime/heap note above for what that costs).
 
-## Real output (`npx tsx tools/sim/main.ts`, 2026-08-08, PH-A5)
+## Real output (`npx tsx tools/sim/main.ts`, 2026-08-08, PH-A5 + addendum-deck-floor)
 
 ```
 === PH-A3 simulation report ===
-Total games: 72600
-Overall invariant counts: I1=10776482 I2=5388241 I3=5388241 I4=1333790 I6=21552964 I7=5388241 I8=5388241 I9=5388241 I10=5388241
+Total games: 85800
+Overall invariant counts: I1=11082596 I2=5541298 I3=5541298 I4=1371202 I6=22165192 I7=5541298 I8=5541298 I9=5541298 I10=5541298
 G2: S1 reached TIEBREAK in 961/1000 games (bounds [2N,2(N+1)] held for all); resolved without TIEBREAK (equal-attempts immediate win) in 39 — a legitimate new branch, not a bug. I7 equal-attempts-at-FINISHED: 1000/1000 (must be 100%). Stumble rate (G2-dedicated, n=10000x2 team-samples): observed=0.9820 vs expected 1-(2/3)^N=0.9827
 G3: checked 1000 S2 games, all DECK_EXHAUSTED-equivalent with positions [0,0] and outcome=draw
 G4 (N=10, p=0.7), small sample n=1000: P(first team wins) under R-b = 0.5510 | under R-a (comparison) = 0.6040 | P(draw) = 0.0130
@@ -72,16 +74,20 @@ G4 analytic prediction: R-b ≈ 0.500, R-a ≈ 0.557 (N=10, p=0.7) — large-sam
 G5: 500 seed pairs compared, 0 mismatches
 G6: 100000 undo-fuzz checks, 0 failures
 S13: 1110 dead-end-discovery undo checks, all restored wasted+closedExits correctly
-S12/G7': 30000 generator-structure checks (seeds x presets x both teams), 0 violations
+S12/G7': 40000 generator-structure checks (seeds x presets x both teams), 0 violations
+G9 (N=4): E[wasted] (walkFullRoute, n=20000) observed=0.8064 vs expected 1-(2/3)^N=0.8025
 G9 (N=6): E[wasted] (walkFullRoute, n=20000) observed=0.9099 vs expected 1-(2/3)^N=0.9122
 G9 (N=10): E[wasted] (walkFullRoute, n=20000) observed=0.9824 vs expected 1-(2/3)^N=0.9827
 G9 (N=14): E[wasted] (walkFullRoute, n=20000) observed=0.9961 vs expected 1-(2/3)^N=0.9966
+S-N4: real gameplay at N=4 «سريعة», p=0.7 — P(first team wins)=0.4990 (expect in [0.48,0.52]) — the model re-measured at the new preset, not assumed
 S11: oracleRoute(A) vs uniformRoute(B), p=0.7 both — P(A wins)=0.6478 (honest cost of route luck; G8 still 0 across this sample, checked per-game)
 S9/I10: 100000 refresh-fuzz checks, 0 mismatches
-Runtime: 156010 ms
+Runtime: 172659 ms
 ```
 
-**G8 (`P(theft) = 0`) is not printed as a line item because it is a per-game guard (`checkNoTheft`) that runs on EVERY one of the 72,600 games via `runScenarioGames` and throws immediately on the first violation — it never threw. This is the redesign's headline result: real-money proof, not a restated theorem.** This run reproduced an earlier same-session run's numbers exactly (same seeds ⇒ deterministic), which is itself corroborating live evidence for G5 beyond the harness's own 500-pair internal check.
+**G8 (`P(theft) = 0`) is not printed as a line item because it is a per-game guard (`checkNoTheft`) that runs on EVERY one of the 85,800 games via `runScenarioGames` and throws immediately on the first violation — it never threw, including across the new N=4 games (S-N4). This is the redesign's headline result: real-money proof, not a restated theorem.** This run reproduced an earlier same-session run's numbers exactly (same seeds ⇒ deterministic), which is itself corroborating live evidence for G5 beyond the harness's own 500-pair internal check.
+
+**N=4 «سريعة», added by addendum-deck-floor-2026-08-08: the one-stumble dose holds there, verified not assumed.** The advisor's own ruling cites `P(stumble) = 0.80` at N=4 as a load-bearing fact ("the dead-end beat still lands for four teams in five"). Measured: **G9 (N=4): observed 0.8064 vs the exact formula 1-(2/3)^4 = 0.8025** (diff 0.0039, well inside ±0.01) — and **S-N4's real-gameplay P(first team wins) = 0.4990**, confirming the generator-symmetry fairness argument holds at the new preset exactly as it does at N=6/10/14.
 
 ## Two findings from the A5 run (kept visible, not tuned away)
 

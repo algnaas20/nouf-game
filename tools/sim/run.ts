@@ -150,6 +150,7 @@ export interface SimulationReport {
   g5: { checked: number; mismatches: number };
   g6: { checks: number; failures: number };
   g9: { N: number; observed: number; expected: number; samples: number }[];
+  sN4PFirst: number;
   s11PAWins: number;
   s12Checked: number;
   s13DeadEndUndoChecks: number;
@@ -338,7 +339,9 @@ export function runSimulation(): SimulationReport {
   }
 
   // G9 — E[wasted] per team matches 1-(2/3)^N within ±0.01, at EACH preset
-  // (6/10/14). Measured with `walkFullRoute` (real `buildMaze`/
+  // (4/6/10/14 — N=4 «سريعة» added addendum-deck-floor-2026-08-08, D-09.12′,
+  // whose own ruling cites P(stumble)=0.80 at N=4; verified below, not
+  // assumed). Measured with `walkFullRoute` (real `buildMaze`/
   // `availableExits`/`resolveMove`, uniform-random exit choice at every
   // junction — the same rule `uniformRoute` applies inside a real game),
   // walking each team's route in isolation from junction 0 to N.
@@ -357,7 +360,7 @@ export function runSimulation(): SimulationReport {
   // ending rule involved) — `walkFullRoute` measures precisely that,
   // without R-b's turn-taking and ending logic contaminating the sample.
   const g9Results: { N: number; observed: number; expected: number; samples: number }[] = [];
-  for (const N of [6, 10, 14] as const) {
+  for (const N of [4, 6, 10, 14] as const) {
     const g9Rand = makeFuzzRand(70000 + N);
     const SAMPLES = 20000;
     let wSum = 0;
@@ -374,6 +377,38 @@ export function runSimulation(): SimulationReport {
       );
     }
     g9Results.push({ N, observed, expected, samples: SAMPLES });
+  }
+
+  // ---- S-N4: addendum-deck-floor-2026-08-08 (D-09.12′) added «سريعة»
+  //      (N=4). Every OTHER real-gameplay scenario above hardcodes N=10 (or
+  //      N=14 for S7's termination stress) — G9's `walkFullRoute` and S12's
+  //      `checkGeneratorStructure` cover N=4 structurally/in isolation, but
+  //      neither plays a real full game through `legalEvents`/`applyEvent`
+  //      at N=4. This does: a real, asserted re-measurement of P(first team
+  //      wins) at the new preset, not just an isolated mechanic check — "the
+  //      model holds at N=4", not assumed. G8 (checkNoTheft) and G7' (move
+  //      bound) are already checked per-game by `runScenarioGames`. ----
+  const deckN4 = generateDeck(30); // green band at N=4 (>= 21)
+  const { scenario: sN4, results: sN4Results } = runScenarioGames(
+    'S-N4',
+    'real gameplay at N=4 «سريعة» (uniformRoute, p=0.7) — re-measures P(first team wins) at the new preset',
+    3000,
+    4,
+    deckN4,
+    () => withRoutePolicy(makeUniformRandomPolicy(0.7), uniformRoute),
+    60001,
+  );
+  scenarios.push(sN4);
+  overallCounts = mergeCounts(overallCounts, sN4.counts);
+  totalGames += sN4.games;
+  let sN4FirstWins = 0;
+  for (const r of sN4Results) {
+    const outcomeTeamN4 = outcomeTeam(r.states[r.states.length - 1]!.outcome);
+    if (outcomeTeamN4 === r.firstTeam) sN4FirstWins++;
+  }
+  const sN4PFirst = sN4FirstWins / sN4Results.length;
+  if (sN4PFirst < 0.48 || sN4PFirst > 0.52) {
+    throw new Error(`S-N4 violated: P(first team wins) at N=4 = ${sN4PFirst.toFixed(4)}, expected in [0.48, 0.52] (n=${sN4Results.length})`);
   }
 
   // ---- S11: oracleRoute (team A, never stumbles) vs uniformRoute (team B,
@@ -401,16 +436,17 @@ export function runSimulation(): SimulationReport {
   }
   const s11PAWins = s11AWins / s11Results.length;
 
-  // ---- S12: generator sweep — 10,000 seeds x {6,10,14} x both teams,
-  //      structural G7' assertions only (no gameplay). ----
+  // ---- S12: generator sweep — 10,000 seeds x {4,6,10,14} x both teams,
+  //      structural G7' assertions only (no gameplay). N=4 («سريعة») added
+  //      addendum-deck-floor-2026-08-08 (D-09.12′). ----
   let s12Checked = 0;
-  for (const N of [6, 10, 14] as const) {
+  for (const N of [4, 6, 10, 14] as const) {
     for (let seed = 1; seed <= 10000; seed++) {
       checkGeneratorStructure(seed, N);
       s12Checked++;
     }
   }
-  scenarios.push({ id: 'S12', description: 'generator sweep: 10,000 seeds x 3 presets, G7\' structural assertions', games: s12Checked, counts: freshCounts() });
+  scenarios.push({ id: 'S12', description: 'generator sweep: 10,000 seeds x 4 presets, G7\' structural assertions', games: s12Checked, counts: freshCounts() });
   totalGames += s12Checked;
 
   // ---- G4: P(first team wins), measured both ways, at the headline N=10,p=0.7 ----
@@ -534,7 +570,7 @@ export function runSimulation(): SimulationReport {
   // ---- S-EMPTY: F-2 regression at scale — a deck with ZERO questions must
   //      reach FINISHED (declared draw) at the very first TURN_START in
   //      exactly one more event, never freeze. Both firstTeam parities, all
-  //      three presets, 200 seeds each. Bypasses runScenarioGames/checkG1:
+  //      four presets, 200 seeds each. Bypasses runScenarioGames/checkG1:
   //      G1's `maxTransitions = 20 * deckSize` is 0 for an empty deck, which
   //      would itself misfire on the correct 2-event (GAME_STARTED,
   //      GAME_ENDED) game this scenario expects — a different, pre-existing
@@ -542,7 +578,7 @@ export function runSimulation(): SimulationReport {
   const deckEmpty = generateDeck(0);
   let sEmptyChecked = 0;
   let sEmptyCounts = freshCounts();
-  for (const N of [6, 10, 14] as const) {
+  for (const N of [4, 6, 10, 14] as const) {
     for (let seed = 1; seed <= 200; seed++) {
       const firstTeam: TeamId = seed % 2 === 0 ? 'A' : 'B';
       const result = playGame(seed, firstTeam, N, deckEmpty, alwaysCorrect);
@@ -743,6 +779,7 @@ export function runSimulation(): SimulationReport {
     g5: { checked: g5Checked, mismatches: g5Mismatches },
     g6: { checks: g6Checks, failures: g6Failures },
     g9: g9Results,
+    sN4PFirst,
     s11PAWins,
     s12Checked,
     s13DeadEndUndoChecks,
@@ -815,6 +852,8 @@ export function printReport(report: SimulationReport): void {
   for (const g9 of report.g9) {
     console.log(`G9 (N=${g9.N}): E[wasted] (walkFullRoute, n=${g9.samples}) observed=${g9.observed.toFixed(4)} vs expected 1-(2/3)^N=${g9.expected.toFixed(4)}`);
   }
+  // eslint-disable-next-line no-console
+  console.log(`S-N4: real gameplay at N=4 «سريعة», p=0.7 — P(first team wins)=${report.sN4PFirst.toFixed(4)} (expect in [0.48,0.52]) — the model re-measured at the new preset, not assumed`);
   // eslint-disable-next-line no-console
   console.log(`S11: oracleRoute(A) vs uniformRoute(B), p=0.7 both — P(A wins)=${report.s11PAWins.toFixed(4)} (honest cost of route luck; G8 still 0 across this sample, checked per-game)`);
   // eslint-disable-next-line no-console

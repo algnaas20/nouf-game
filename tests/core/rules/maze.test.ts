@@ -21,7 +21,7 @@ import { createRng, drawInt } from '../../../src/core/rng';
 describe('buildMaze — purity, version stamp, structure', () => {
   it('is pure: the same (seed, N) produces a deep-identical layout every call', () => {
     for (const seed of [1, 2, 42, 12345]) {
-      for (const N of [6, 10, 14]) {
+      for (const N of [4, 6, 10, 14]) {
         const a = buildMaze(seed, N);
         const b = buildMaze(seed, N);
         expect(a).toEqual(b);
