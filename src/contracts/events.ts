@@ -21,6 +21,9 @@ export interface GameStartedEvent extends EventBase {
   teamNames: [string, string];
   firstTeam: TeamId;
   deckHash: string;
+  /** Pins the maze generator version at the moment play started — same
+   *  refuse-on-mismatch treatment as `deckHash` (M-RESUME-1). */
+  mazeGenVersion: number;
 }
 
 export interface QuestionShownEvent extends EventBase {
@@ -43,7 +46,12 @@ export interface NoAnswerEvent extends EventBase {
 export interface MoveAppliedEvent extends EventBase {
   type: 'MOVE_APPLIED';
   team: TeamId;
-  delta: number;
+  /** The exit the operator tapped, or null when the answer was wrong (no
+   *  movement) or the team had already reached the goal. The RESULT
+   *  (advance vs. dead end) is never stored — it is derived from the maze
+   *  layout via `resolveMove`, so a log can never contradict the rules
+   *  (game-systems-expert §10.2). */
+  exit: number | null;
 }
 
 export interface TurnPassedEvent extends EventBase {

@@ -1,6 +1,9 @@
 /**
- * D-09.13 — deck-size bands, thresholds set by `play-experience-advisor`.
- * `D` = deck size (number of questions), `N` = track length (stations).
+ * D-09.13 — deck-size bands, thresholds set by `play-experience-advisor`,
+ * restated by game-systems-expert 2026-08-08 §9 for the branching-maze
+ * movement model: a perfect game now needs `N+1` moves in ~98% of games
+ * (the one-stumble rule), not `N`, so every threshold's `N` becomes `N+1`.
+ * The shape of the ruling (and the "+4" decider-reserve term) is unchanged.
  *
  * Green already bakes in D-09.10's 4-question decider reserve (the "+4"
  * term) — there is no separate runtime reservation of specific questions;
@@ -10,8 +13,8 @@
 export type DeckBand = 'green' | 'warn' | 'refuse';
 
 export function deckBand(D: number, N: number): DeckBand {
-  const greenThreshold = 3.34 * N + 4;
-  const refuseThreshold = 2 * N + 2;
+  const greenThreshold = 3.34 * (N + 1) + 4;
+  const refuseThreshold = 2 * (N + 1) + 2;
   if (D >= greenThreshold) return 'green';
   if (D >= refuseThreshold) return 'warn';
   return 'refuse';
@@ -21,12 +24,13 @@ export function deckBand(D: number, N: number): DeckBand {
  * The largest N for which `D` questions land in the green band — the
  * editor's "your deck of D supports N stations" number (coordinator's A2
  * item 4). Exact inverse of the green-band formula:
- *   D >= 3.34N + 4  <=>  N <= (D - 4) / 3.34
- * This is the precise form of the report's rough `N_max ≈ D·p/2` estimate,
- * self-consistent with `deckBand` rather than a second, looser formula.
+ *   D >= 3.34(N+1) + 4  <=>  N <= (D - 4) / 3.34 - 1
+ * self-consistent with `deckBand` rather than a second, looser formula
+ * (game-systems-expert §10.4: "maxGreenTrackLength inverts to
+ * floor((D − 4) / 3.34) − 1").
  */
 export function maxGreenTrackLength(D: number): number {
-  return Math.max(0, Math.floor((D - 4) / 3.34));
+  return Math.max(0, Math.floor((D - 4) / 3.34) - 1);
 }
 
 const PRESETS = [6, 10, 14] as const;

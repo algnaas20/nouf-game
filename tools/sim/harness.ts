@@ -10,6 +10,7 @@ import type { GameEvent, GameState, Question, TeamId } from '../../src/contracts
 import { applyEvent } from '../../src/core/reducer';
 import { fold } from '../../src/core/fold';
 import { legalEvents, type GameContext } from '../../src/core/legal';
+import { MAZE_GEN_VERSION } from '../../src/core/rules/maze';
 import { computeDeckHash } from './deck';
 
 /** A policy picks one of the legal candidate events. Its own decision logic
@@ -43,6 +44,7 @@ export function startEvent(
     teamNames: ['فريق أ', 'فريق ب'],
     firstTeam,
     deckHash: computeDeckHash(deck),
+    mazeGenVersion: MAZE_GEN_VERSION,
   };
 }
 

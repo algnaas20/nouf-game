@@ -10,6 +10,7 @@ import { applyEvent } from '../../../src/core/reducer';
 import { fold, undo, commit } from '../../../src/core/fold';
 import { legalEvents, type GameContext } from '../../../src/core/legal';
 import { deckBand, maxGreenTrackLength, preselectTrackLength } from '../../../src/core/rules/deck-bands';
+import { MAZE_GEN_VERSION } from '../../../src/core/rules/maze';
 
 function generateDeck(n: number): Question[] {
   return Array.from({ length: n }, (_, i) => ({
@@ -71,6 +72,7 @@ function startEvent(seed: number, firstTeam: TeamId, N: number, deck: readonly Q
     teamNames: ['فريق أ', 'فريق ب'],
     firstTeam,
     deckHash: computeDeckHash(deck),
+    mazeGenVersion: MAZE_GEN_VERSION,
   };
 }
 
@@ -108,12 +110,13 @@ function runGame(
   return { events, states };
 }
 
-describe('PH-A2 — deck-size bands (D-09.13)', () => {
-  it('N=10, D=21,22,37,38 → refuse/warn/warn/green (four cases, four results)', () => {
+describe('PH-A2 — deck-size bands (D-09.13), restated by game-systems-expert §9 for N+1 moves', () => {
+  it('N=10, D=23,24,40,41 → refuse/warn/warn/green (four cases, four results) — report §9\'s own worked table', () => {
     const N = 10;
-    const results = [21, 22, 37, 38].map((D) => deckBand(D, N));
+    // greenThreshold(10) = 3.34*(10+1)+4 = 40.74 ; refuseThreshold(10) = 2*(10+1)+2 = 24
+    const results = [23, 24, 40, 41].map((D) => deckBand(D, N));
     // eslint-disable-next-line no-console
-    console.log(`[A2 deck-bands] N=10 D=21→${results[0]}, D=22→${results[1]}, D=37→${results[2]}, D=38→${results[3]}`);
+    console.log(`[A2/A5 deck-bands] N=10 D=23→${results[0]}, D=24→${results[1]}, D=40→${results[2]}, D=41→${results[3]}`);
     expect(results).toEqual(['refuse', 'warn', 'warn', 'green']);
   });
 
@@ -123,8 +126,10 @@ describe('PH-A2 — deck-size bands (D-09.13)', () => {
       expect(deckBand(D, nMax)).toBe('green');
       expect(deckBand(D, nMax + 1)).not.toBe('green');
     }
-    expect(preselectTrackLength(38)).toBe(10); // green at 10, capped at 10 even though 14 might also fit
-    expect(preselectTrackLength(10)).toBe(6); // only 6 is at least reachable without refusing
+    // D=55 is green at N=6, N=10 AND N=14 under the new formula — capping at
+    // 10 must still win even though 14 would also qualify.
+    expect(preselectTrackLength(55)).toBe(10);
+    expect(preselectTrackLength(10)).toBe(6); // refuse everywhere; falls back to the smallest preset
   });
 });
 
@@ -154,8 +159,9 @@ describe('PH-A2 — R-b equal-attempts ending', () => {
     expect(equalAtFinish).toBe(games);
   });
 
-  it('G2: S1 (always correct) reaches TIEBREAK at exactly question 2N — literal expected value', () => {
-    const EXPECTED_QUESTIONS_BEFORE_TIEBREAK = 20; // hand-written literal for N=10: 2*N, NOT computed from N here
+  it('G2: S1 (always correct) reaches TIEBREAK within [2N, 2(N+1)] questions — game-systems-expert §11.2 bound (not a single literal anymore: the stumble is stochastic)', () => {
+    const LOWER = 2 * N; // hand-written literal, NOT computed from N by the code under test
+    const UPPER = 2 * (N + 1); // hand-written literal
     const { events, states } = runGame(1, 'A', N, DECK, alwaysCorrectPolicy, 500);
     const firstTiebreakIdx = states.findIndex((s) => s.stateId === 'TIEBREAK');
     expect(firstTiebreakIdx).toBeGreaterThan(-1);
@@ -164,9 +170,10 @@ describe('PH-A2 — R-b equal-attempts ending', () => {
       .filter((e) => e.type === 'QUESTION_SHOWN').length;
     // eslint-disable-next-line no-console
     console.log(
-      `[A2 criterion 3 / G2] questions shown before first TIEBREAK state = ${questionsShownBeforeTiebreak} (expected ${EXPECTED_QUESTIONS_BEFORE_TIEBREAK})`,
+      `[A2/A5 criterion 3 / G2] questions shown before first TIEBREAK state = ${questionsShownBeforeTiebreak} (expected in [${LOWER}, ${UPPER}])`,
     );
-    expect(questionsShownBeforeTiebreak).toBe(EXPECTED_QUESTIONS_BEFORE_TIEBREAK);
+    expect(questionsShownBeforeTiebreak).toBeGreaterThanOrEqual(LOWER);
+    expect(questionsShownBeforeTiebreak).toBeLessThanOrEqual(UPPER);
     // The game must still terminate (S1 in the tiebreak never produces a
     // single-correct pair, so it runs to deck exhaustion — a declared draw
     // — rather than hanging; this is G1's termination bound in miniature).
@@ -197,11 +204,11 @@ describe('PH-A2 — R-b equal-attempts ending', () => {
     let state = fold(events);
     state = applyEvent(state, { type: 'QUESTION_SHOWN', seq: 1, at: FIXED_NOW(), questionId: 'q1', optionOrder: [0, 1, 2, 3] });
     state = applyEvent(state, { type: 'ANSWER_CHOSEN', seq: 2, at: FIXED_NOW(), optionId: 1, correct: false });
-    state = applyEvent(state, { type: 'MOVE_APPLIED', seq: 3, at: FIXED_NOW(), team: 'A', delta: 0 });
+    state = applyEvent(state, { type: 'MOVE_APPLIED', seq: 3, at: FIXED_NOW(), team: 'A', exit: null });
     events.push(
       { type: 'QUESTION_SHOWN', seq: 1, at: FIXED_NOW(), questionId: 'q1', optionOrder: [0, 1, 2, 3] },
       { type: 'ANSWER_CHOSEN', seq: 2, at: FIXED_NOW(), optionId: 1, correct: false },
-      { type: 'MOVE_APPLIED', seq: 3, at: FIXED_NOW(), team: 'A', delta: 0 },
+      { type: 'MOVE_APPLIED', seq: 3, at: FIXED_NOW(), team: 'A', exit: null },
     );
     const ctx: GameContext = { deck: smallDeck, events, now: FIXED_NOW };
     const candidates = legalEvents(state, ctx);

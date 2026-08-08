@@ -9,23 +9,51 @@
 import { describe, expect, it } from 'vitest';
 import type { TeamId } from '../../src/contracts';
 import { playGame } from '../../tools/sim/harness';
-import { alwaysCorrect, alwaysWrong, makeUniformRandomPolicy } from '../../tools/sim/policies';
-import { checkGameInvariants, checkG1, checkG3, checkG7, freshCounts, mergeCounts } from '../../tools/sim/invariants';
+import {
+  alwaysCorrect,
+  alwaysWrong,
+  makeUniformRandomPolicy,
+  uniformRoute,
+  oracleRoute,
+  withRoutePolicy,
+} from '../../tools/sim/policies';
+import {
+  checkGameInvariants,
+  checkG1,
+  checkG3,
+  checkGeneratorStructure,
+  checkG7MoveBound,
+  checkNoTheft,
+  freshCounts,
+  mergeCounts,
+} from '../../tools/sim/invariants';
 import { generateDeck } from '../../tools/sim/deck';
 import { fold, undo } from '../../src/core/fold';
 
-describe('PH-A3 smoke: I1–I10 hold, G1/G3/G7 hold, over a small sample', () => {
-  it('50 S5-style games (p=0.6, N=10, D=30): all invariants pass, counts > 0', () => {
+describe('PH-A3/A5 smoke: I1–I14 hold, G1/G3/G7\'/G8 hold, over a small sample', () => {
+  it('50 S5-style games (p=0.6, N=10, D=30, uniformRoute): all invariants pass, counts > 0', () => {
     const deck = generateDeck(30);
     let counts = freshCounts();
     for (let seed = 1; seed <= 50; seed++) {
       const firstTeam: TeamId = seed % 2 === 0 ? 'A' : 'B';
-      const { events, states } = playGame(seed, firstTeam, 10, deck, makeUniformRandomPolicy(0.6));
+      const { events, states } = playGame(
+        seed,
+        firstTeam,
+        10,
+        deck,
+        withRoutePolicy(makeUniformRandomPolicy(0.6), uniformRoute),
+      );
       checkG1(seed, events, deck);
       counts = mergeCounts(counts, checkGameInvariants(seed, events, states, deck));
+      checkG7MoveBound(seed, events, 10);
+      checkNoTheft(seed, events, states[states.length - 1]!);
     }
     expect(counts.I1).toBeGreaterThan(0);
     expect(counts.I9).toBeGreaterThan(0);
+    expect(counts.I11).toBeGreaterThan(0);
+    expect(counts.I12).toBeGreaterThan(0);
+    expect(counts.I13).toBeGreaterThan(0);
+    expect(counts.I14).toBeGreaterThan(0);
   });
 
   it('G3: S2 (always wrong) ends with positions [0,0] and outcome draw', () => {
@@ -34,10 +62,38 @@ describe('PH-A3 smoke: I1–I10 hold, G1/G3/G7 hold, over a small sample', () =>
     checkG3(1, states[states.length - 1]!);
   });
 
-  it('G7: maze completability holds for S1 games', () => {
-    const deck = generateDeck(30);
-    const { states } = playGame(1, 'A', 10, deck, alwaysCorrect);
-    checkG7(1, states[states.length - 1]!);
+  it("G7': generator structure (junction counts, exits, no shared junctions) holds for 100 seeds x 3 presets", () => {
+    for (const N of [6, 10, 14]) {
+      for (let seed = 1; seed <= 100; seed++) {
+        checkGeneratorStructure(seed, N);
+      }
+    }
+  });
+
+  it("G7': every simulated game finishes in <= N+1 moves per team (oracleRoute AND uniformRoute)", () => {
+    const deck = generateDeck(40);
+    for (const route of [uniformRoute, oracleRoute]) {
+      for (let seed = 1; seed <= 30; seed++) {
+        const firstTeam: TeamId = seed % 2 === 0 ? 'A' : 'B';
+        const { events } = playGame(seed, firstTeam, 10, deck, withRoutePolicy(alwaysCorrect, route));
+        checkG7MoveBound(seed, events, 10);
+      }
+    }
+  });
+
+  it('G8: P(theft) === 0 under uniformRoute (worst case) over 200 games, N=10, p=0.7', () => {
+    const deck = generateDeck(40);
+    for (let seed = 1; seed <= 200; seed++) {
+      const firstTeam: TeamId = seed % 2 === 0 ? 'A' : 'B';
+      const { events, states } = playGame(
+        seed,
+        firstTeam,
+        10,
+        deck,
+        withRoutePolicy(makeUniformRandomPolicy(0.7), uniformRoute),
+      );
+      checkNoTheft(seed, events, states[states.length - 1]!);
+    }
   });
 
   it('G5: same seed + policy ⇒ byte-identical event log (20 seeds)', () => {
