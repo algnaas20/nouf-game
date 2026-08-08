@@ -293,6 +293,17 @@ body {
   color: var(--color-bg);
   border-color: var(--color-text);
 }
+/* D-25 / task 3 readiness gate (worklog-B5.md, 2026-08-08): a disabled
+   `.op-button` (team-setup's «ابدأ» when the deck cannot support the
+   selected track — real defect found and fixed here: the button was
+   functionally blocked but visually IDENTICAL to an enabled one, a silent
+   dead-end tap the on-screen band-line text alone did not fully excuse).
+   Never opacity-only (the project's own §7.3 "colour/opacity is never the
+   only signal" discipline) — cursor and a visibly muted fill both change. */
+.op-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 
 /* ---- Undo corner — same corner on every screen (inline-end, block-end). ---- */
 .undo-corner {

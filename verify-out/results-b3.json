@@ -14,10 +14,6 @@
       {
         "file": "screens\\question-audio.ts",
         "count": 4
-      },
-      {
-        "file": "session\\placeholder-media.ts",
-        "count": 6
       }
     ]
   },
@@ -138,15 +134,15 @@
     "allMeetSize": true,
     "rects": [
       {
-        "width": 293.21875,
+        "width": 269.875,
         "height": 96
       },
       {
-        "width": 664.640625,
+        "width": 633.265625,
         "height": 96
       },
       {
-        "width": 609.6875,
+        "width": 581.828125,
         "height": 96
       }
     ]

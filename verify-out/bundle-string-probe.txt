@@ -1,0 +1,10 @@
+﻿Bundle: index-j5mxx2ik.js
+questions.json => 1
+.zip => 2
+formatVersion => 1
+showSaveFilePicker => 2
+showOpenFilePicker => 0
+demo-image- => 0
+demo-text- => 0
+buildDemoDeck => 0
+resolveDemoMediaUrl => 0

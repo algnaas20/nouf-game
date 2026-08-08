@@ -1,11 +1,12 @@
 /**
- * PH-B4 / Task 1 — direct proof of `QuestionScreenParams.resolveMediaUrl`
- * (WL-B, tests/stage/). Exercises all three documented branches of
- * `resolveQuestionMediaUrl` in `src/stage/screens/question.ts`:
- *   1. absent  -> falls back to `resolveDemoMediaUrl` (zero regression path)
- *   2. present, returns a string -> that exact string is used as the URL
- *   3. present, returns null -> empty string -> the element's own `error`
- *      listener fires -> the screen's existing truthful failure copy shows
+ * PH-B4 / Task 1's `resolveMediaUrl` seam — RE-POINTED for D-25 / F-1
+ * (worklog-B5.md, 2026-08-08): the demo deck and its `resolveDemoMediaUrl`
+ * fallback are DELETED. `resolveQuestionMediaUrl` in
+ * `src/stage/screens/question.ts` now has only TWO observable outcomes, not
+ * three — "absent" and "present-but-returns-null" are the SAME case ("no
+ * media resolved for this question"), both falling through to the empty-
+ * string URL and the screen's own truthful failure copy. There is no
+ * fallback resolver left to test.
  *
  *   npx vite --port 3011 --strictPort   (separate terminal / background)
  *   node tests/stage/verify-resolve-media-url.manual.cjs
@@ -22,34 +23,40 @@ async function main() {
   const browser = await chromium.launch({ headless: true });
   const results = {};
 
-  // ---------- Branch 1: absent -> demo resolver used (unchanged path) ----------
+  // ---------- Branch 1: absent -> truthful failure copy (no demo fallback left) ----------
   {
     const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
     await page.goto(URL);
     results.branchAbsent = await page.evaluate(async () => {
       const questionMod = await import('/src/stage/screens/question.ts');
-      const demoMod = await import('/src/stage/session/demo-deck.ts');
       const appRoot = document.getElementById('app');
       appRoot.innerHTML = '';
       const container = document.createElement('div');
       container.className = 'stage-root';
       appRoot.appendChild(container);
-      const question = { id: 'demo-image-1', text: 'س', options: ['أ', 'ب', 'ج', 'د'], correctIndex: 0, media: { kind: 'image', sha256: 'x', ext: 'png' } };
-      const expectedUrl = demoMod.resolveDemoMediaUrl('demo-image-1');
+      const question = { id: 'no-resolver-q', text: 'س', options: ['أ', 'ب', 'ج', 'د'], correctIndex: 0, media: { kind: 'image', sha256: 'x', ext: 'png' } };
       questionMod.renderQuestionScreen(container, {
         question, optionOrder: [0, 1, 2, 3], teamNames: ['أ', 'ب'], answeringTeam: 'A', positions: [0, 0],
         revealed: false, chosenOption: null, canUndo: false,
         mediaUi: { imageBeat: 2, audio: { hasEverPlayed: false, playbackState: 'idle', optionsRevealed: false } },
         setMediaUi: () => {}, onChoose: () => {}, onNoAnswer: () => {}, onNext: () => {}, onUndo: () => {},
-        // resolveMediaUrl deliberately omitted
+        // resolveMediaUrl deliberately omitted entirely
       });
       const img = document.querySelector('.image-beat2-img');
-      return { imgSrc: img?.src ?? null, expectedUrl, matches: img?.src === expectedUrl };
+      const srcBeforeError = img?.src ?? null;
+      await new Promise((r) => setTimeout(r, 300)); // let the `error` event fire on the empty src
+      const errorMsg = document.querySelector('.image-beat2-image-box .media-error')?.textContent ?? null;
+      return {
+        srcWasEmpty: srcBeforeError === '' || srcBeforeError === window.location.href, // browsers resolve `src=""` to the document URL
+        errorMsg,
+        expected: 'تعذّر عرض الصورة لهذا السؤال. تابعوا بالسؤال نصّياً.',
+        truthful: errorMsg === 'تعذّر عرض الصورة لهذا السؤال. تابعوا بالسؤال نصّياً.',
+      };
     });
     await page.close();
   }
 
-  // ---------- Branch 2: provided, returns a real URL -> that URL is used, NOT the demo one ----------
+  // ---------- Branch 2: provided, returns a real URL -> that URL is used ----------
   {
     const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
     await page.goto(URL);
@@ -77,7 +84,7 @@ async function main() {
     await page.close();
   }
 
-  // ---------- Branch 3: provided, returns null -> empty src -> real error state, not silently blank ----------
+  // ---------- Branch 3: provided, returns null -> empty src -> real error state ----------
   {
     const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
     await page.goto(URL);

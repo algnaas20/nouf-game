@@ -1,4 +1,4 @@
-import type { GameEvent, TeamId } from '../contracts';
+import type { GameEvent, Question, TeamId } from '../contracts';
 import { renderHomeScreen } from './screens/home';
 import { renderTeamSetupScreen } from './screens/team-setup';
 import { renderQuestionScreen } from './screens/question';
@@ -7,14 +7,34 @@ import { renderTurnHandoff, type HandoffKind } from './screens/turn-handoff';
 import { renderEndingScreen, computeNextFirstTeam } from './screens/ending';
 import { renderResumePromptScreen, renderDeckMismatchScreen } from './screens/resume-prompt';
 import { initialMediaUiState, type MediaUiState } from './screens/media-ui-state';
+import { resetAutoplayTracking } from './screens/question-audio';
 import { GameDriver, findAnswerChosen, findNoAnswer, findMoveApplied, findTurnPassed, findGameEnded, findQuestionShown, isAudienceDecision, isDecisiveEnding } from './session/game-driver';
-import { buildDemoDeck } from './session/demo-deck';
 import { computeDeckHash } from './session/deck-hash';
 // WL-C's own doc comment on `mountEditor` names this exact import as the
 // intended integration point (خطة.md §5.4 — "same app, its own screen,
 // reached only from the home screen. Not a mode toggle."). Import only —
 // `src/editor/**` stays WL-C-owned; nothing here reaches into its internals.
 import { mountEditor } from '../editor/app';
+// D-25 (2026-08-08) / adversarial review F-1 fix (worklog-B5.md): the ONLY
+// source of playable questions now is the author's own draft — either typed
+// in directly through «أسئلتي», or written there by importing a pack
+// (`applyImportedPackToDraft`, WL-D's `src/pack/apply-import.ts`, which
+// itself writes through this exact same `DraftStore`). There is no bundled
+// demo deck any more. `createDraftStore`/`DraftStore` are WL-C's
+// (`src/editor/**`); read/import only, never written to from this file.
+import { createDraftStore, type DraftStore } from '../editor/draft-store';
+// `buildPackFromDraft` is WL-D's (`src/pack/from-draft.ts`) — the exact same
+// ready-question-filtering + media-collection logic the real "صدّر للنشر"/
+// "احفظ نسخة" flows use, reused here rather than re-derived, so the deck
+// that plays can never quietly drift from the deck that exports.
+import { buildPackFromDraft } from '../pack/from-draft';
+// `saveBackupToDevice`'s own doc comment names this exact call site
+// (`mountEditor({ onRequestBackup: () => saveBackupToDevice(store, title) })`)
+// as its intended wiring point — closing adversarial-review F-1's dead-
+// button defect (the backup badge / storage-full-banner save buttons were
+// visible, clickable, and did nothing, because nothing supplied
+// `onRequestBackup` at this call site).
+import { saveBackupToDevice } from '../pack/save-to-device';
 // PH-A4 (WL-A) — `checkResume()`'s `ResumeCheck` is the complete data
 // contract for the prompt below; this file only ever READS it and never
 // mutates storage directly except via the one explicit `clearSession()`
@@ -25,357 +45,473 @@ import { mountEditor } from '../editor/app';
 import { checkResume, clearSession } from '../core/session-store';
 import { fold } from '../core/fold';
 
+/**
+ * Placeholder pack title (adversarial review §5(a)/F-1 item 3 — WL-D/WL-C's
+ * territory to fully resolve: the draft has no per-deck title field yet;
+ * `src/storage/idb.ts`/`DraftMeta` is WL-C-owned and this file does not add
+ * one). Used only as the `title` argument `buildPackFromDraft`/
+ * `saveBackupToDevice` require — disclosed in worklog-B5.md, not presented
+ * as a real "name your game" feature.
+ */
+const GAME_TITLE = 'لعبة نوف';
+
 /** No client-side router (D-11) — a plain state switch inside one root
- *  element, now driven by the REAL `src/core` state machine (`GameDriver`)
- *  instead of PH-B1's temporary `src/stage/demo/session.ts`, which is
- *  removed in this phase. */
+ *  element, driven by the REAL `src/core` state machine (`GameDriver`).
+ *  `mountApp` itself stays synchronous (its callers, `src/main.ts`, never
+ *  await it) — the one-time async work (loading the draft store, building
+ *  the first playable deck) runs inside `initialize()`, fired-and-forgotten
+ *  the same way `renderEditorShell` already does for `mountEditor` below. */
 export function mountApp(root: HTMLElement): void {
-  const deck = buildDemoDeck();
-  const deckHash = computeDeckHash(deck);
-
-  let driver = new GameDriver(deck);
-  let localPhase: 'home' | 'editor' | 'team-setup' | 'draw' | 'playing' | 'resume-prompt' | 'deck-mismatch' = 'home';
-  let drawnFirstTeam: TeamId = 'A';
-  let pendingTeamNames: [string, string] = ['', ''];
-  let pendingN = 10;
-
-  // PH-A4 — classified ONCE, at cold start, before the first `render()`.
-  // A resumable session only ever exists right after a real reload/
-  // interruption; nothing later in this same tab's lifetime can produce a
-  // new one to check for (every subsequent log mutation goes through
-  // `GameDriver`'s own `persist()`, which this same tab's `driver` is
-  // already the source of truth for).
-  let resumableEvents: GameEvent[] | null = null;
-  {
-    const resumeCheck = checkResume(deckHash);
-    if (resumeCheck.kind === 'available') {
-      resumableEvents = resumeCheck.events;
-      localPhase = 'resume-prompt';
-    } else if (resumeCheck.kind === 'refused' && resumeCheck.reason === 'deck-mismatch') {
-      localPhase = 'deck-mismatch';
-    } else if (resumeCheck.kind === 'refused' && resumeCheck.reason === 'corrupt') {
-      // Nothing legible to refuse against — a corrupt/unparseable payload
-      // has no recoverable content, so there is nothing a host could
-      // meaningfully choose to keep. Silently cleared rather than shown as
-      // a dead-end screen with no real choice on it (constraint row 17:
-      // technical detail never reaches the stage). Disclosed, not hidden —
-      // see the worklog.
-      clearSession();
-    }
-    // 'none' → stays 'home', the pre-PH-A4 default behaviour, unchanged.
-  }
-
-  let mediaUi: MediaUiState = initialMediaUiState();
-  let lastUiQuestionId: string | null = null;
-  let decisiveTimer: ReturnType<typeof setTimeout> | null = null;
-  let cancelHandoff: (() => void) | null = null;
+  const store: DraftStore = createDraftStore();
 
   const wrap = document.createElement('div');
   wrap.className = 'stage-root';
   root.append(wrap);
 
-  // The editor is a normal scrolling document (`src/editor/editor.css`'s own
-  // header explicitly says so — "not the 1920x1080 stage"), so it must NOT
-  // be mounted inside `.stage-root` (`position: fixed`, `overflow: hidden`,
-  // clipped to the 16:9 canvas) — a question list past a couple of screens
-  // would be silently clipped. It is mounted as `wrap`'s SIBLING under the
-  // same outer `root`, and `wrap` itself is hidden (not removed — cheaper to
-  // restore, and it owns no state that would be lost) while the editor is
-  // showing.
-  let editorHost: HTMLElement | null = null;
-  function teardownEditor(): void {
-    if (editorHost) {
-      editorHost.remove();
-      editorHost = null;
-    }
-  }
+  void initialize();
 
-  function setMediaUi(patch: Partial<MediaUiState>): void {
-    mediaUi = { ...mediaUi, ...patch };
-    render();
-  }
+  async function initialize(): Promise<void> {
+    await store.load();
 
-  function startNewGame(teamNames: [string, string], N: number, firstTeam: TeamId): void {
-    driver = new GameDriver(deck);
-    const seed = Math.floor(Math.random() * 1_000_000_000);
-    driver.start({ teamNames, N, firstTeam, seed, deckHash });
-    localPhase = 'playing';
-    render();
-  }
+    // D-25 / F-1: `deck` and `mediaUrlByHash` are the live, re-buildable
+    // projection of the author's draft — never a fixed constant. `deck`
+    // starts empty and stays empty until the author has written (or
+    // imported) at least one ready question; that is now the FIRST-experience
+    // default, not an error state (see `renderHomeScreen`/`team-setup.ts`).
+    let deck: Question[] = [];
+    let deckHash = computeDeckHash(deck);
+    let mediaUrlByHash = new Map<string, string>();
 
-  function render(): void {
-    if (decisiveTimer !== null) {
-      clearTimeout(decisiveTimer);
-      decisiveTimer = null;
-    }
-    if (cancelHandoff) {
-      cancelHandoff();
-      cancelHandoff = null;
+    /**
+     * Rebuilds `deck`/`deckHash`/the media-URL map from the CURRENT draft
+     * contents. Reuses `buildPackFromDraft` (WL-D's — the same function
+     * "صدّر للنشر"/"احفظ نسخة" call) rather than re-deriving the
+     * ready-question filter or the media-collection logic a second time —
+     * the deck that plays can never drift from the deck that exports.
+     * Object URLs from the PREVIOUS deck are revoked first so re-entering
+     * the editor repeatedly across a long authoring session never leaks
+     * blob URLs (mirrors `src/editor/ui/stage-preview.ts`'s own one-URL-at-
+     * a-time discipline).
+     */
+    async function refreshDeck(): Promise<void> {
+      for (const url of mediaUrlByHash.values()) URL.revokeObjectURL(url);
+      const { manifest, media } = await buildPackFromDraft(store, GAME_TITLE);
+      deck = manifest.questions;
+      deckHash = computeDeckHash(deck);
+      const nextMediaUrls = new Map<string, string>();
+      for (const [sha256, blob] of media) nextMediaUrls.set(sha256, URL.createObjectURL(blob));
+      mediaUrlByHash = nextMediaUrls;
     }
 
-    if (localPhase !== 'editor') {
-      teardownEditor();
-      wrap.hidden = false;
+    /** The `resolveMediaUrl` seam (`question.ts`) — backed by the real
+     *  draft media store via the object-URL map above, never a placeholder.
+     *  Returns `null` (not a thrown error) for a question whose media
+     *  genuinely has nothing resolvable yet — `question.ts`'s own dispatcher
+     *  turns that into the screen's existing truthful failure copy. */
+    function resolveMediaUrl(question: Question): string | null {
+      if (question.media.kind === 'none') return null;
+      return mediaUrlByHash.get(question.media.sha256) ?? null;
     }
 
-    if (localPhase === 'home') {
-      renderHomeScreen(wrap, {
-        onStart: () => {
-          localPhase = 'team-setup';
-          render();
-        },
-        onOpenEditor: () => {
-          localPhase = 'editor';
-          render();
-        },
-      });
-      return;
+    await refreshDeck();
+
+    let driver = new GameDriver(deck);
+    let localPhase: 'home' | 'editor' | 'team-setup' | 'draw' | 'playing' | 'resume-prompt' | 'deck-mismatch' = 'home';
+    let drawnFirstTeam: TeamId = 'A';
+    let pendingTeamNames: [string, string] = ['', ''];
+    let pendingN = 10;
+
+    // PH-A4 — classified ONCE, at cold start (now: once the FIRST real deck
+    // is known), before the first `render()`. A resumable session only ever
+    // exists right after a real reload/interruption; nothing later in this
+    // same tab's lifetime can produce a new one to check for (every
+    // subsequent log mutation goes through `GameDriver`'s own `persist()`,
+    // which this same tab's `driver` is already the source of truth for).
+    let resumableEvents: GameEvent[] | null = null;
+    {
+      const resumeCheck = checkResume(deckHash);
+      if (resumeCheck.kind === 'available') {
+        resumableEvents = resumeCheck.events;
+        localPhase = 'resume-prompt';
+      } else if (resumeCheck.kind === 'refused' && resumeCheck.reason === 'deck-mismatch') {
+        localPhase = 'deck-mismatch';
+      } else if (resumeCheck.kind === 'refused' && resumeCheck.reason === 'corrupt') {
+        // Nothing legible to refuse against — a corrupt/unparseable payload
+        // has no recoverable content, so there is nothing a host could
+        // meaningfully choose to keep. Silently cleared rather than shown as
+        // a dead-end screen with no real choice on it (constraint row 17:
+        // technical detail never reaches the stage). Disclosed, not hidden —
+        // see worklog-B4.md.
+        clearSession();
+      }
+      // 'none' → stays 'home', unchanged behaviour.
     }
 
-    if (localPhase === 'resume-prompt') {
-      // `resumableEvents` is guaranteed non-null here — it is set in the
-      // same branch that sets `localPhase = 'resume-prompt'` at startup,
-      // and nothing else can reach this branch.
-      const events = resumableEvents!;
-      // `fold()` — the same function `GameDriver`'s own constructor calls —
-      // read directly here only to show the context line; the actual
-      // resume (below) still goes through the one real `GameDriver`
-      // construction path, never a second reconstruction.
-      const resumedState = fold(events);
-      renderResumePromptScreen(wrap, {
-        teamNames: resumedState.teamNames,
-        positions: resumedState.positions,
-        N: resumedState.N,
-        onContinue: () => {
-          // Re-enter play with the EXACT stored log — `GameDriver`'s own
-          // constructor `fold()`s it, the same function that already
-          // regenerated `resumedState` above; no second reconstruction path.
-          driver = new GameDriver(deck, events);
-          localPhase = 'playing';
-          render();
-        },
-        onNewGame: () => {
-          clearSession(); // explicit operator choice — never silent (§6.3).
-          resumableEvents = null;
-          localPhase = 'home';
-          render();
-        },
-      });
-      return;
+    let mediaUi: MediaUiState = initialMediaUiState();
+    let lastUiQuestionId: string | null = null;
+    let decisiveTimer: ReturnType<typeof setTimeout> | null = null;
+    let cancelHandoff: (() => void) | null = null;
+    // F-4 fix (adversarial review, 2026-08-08 — worklog-B5.md §F4): set
+    // immediately before `driver.undo(); render();` at every undo call
+    // site below. Consumed (read once, then reset) at the very top of the
+    // very next `render()` pass — so the decisive-auto timer never re-arms
+    // on the render immediately following an undo, without touching the
+    // normal forward-play 900ms auto-advance at all.
+    let suppressDecisiveAuto = false;
+
+    // The editor is a normal scrolling document (`src/editor/editor.css`'s
+    // own header explicitly says so — "not the 1920x1080 stage"), so it
+    // must NOT be mounted inside `.stage-root` (`position: fixed`,
+    // `overflow: hidden`, clipped to the 16:9 canvas) — a question list past
+    // a couple of screens would be silently clipped. It is mounted as
+    // `wrap`'s SIBLING under the same outer `root`, and `wrap` itself is
+    // hidden (not removed — cheaper to restore, and it owns no state that
+    // would be lost) while the editor is showing.
+    let editorHost: HTMLElement | null = null;
+    function teardownEditor(): void {
+      if (editorHost) {
+        editorHost.remove();
+        editorHost = null;
+      }
     }
 
-    if (localPhase === 'deck-mismatch') {
-      renderDeckMismatchScreen(wrap, {
-        onNewGame: () => {
-          clearSession();
-          localPhase = 'home';
-          render();
-        },
-      });
-      return;
+    function setMediaUi(patch: Partial<MediaUiState>): void {
+      mediaUi = { ...mediaUi, ...patch };
+      render();
     }
 
-    if (localPhase === 'editor') {
-      wrap.hidden = true;
-      if (!editorHost) {
-        editorHost = renderEditorShell(root, {
+    function startNewGame(teamNames: [string, string], N: number, firstTeam: TeamId): void {
+      resetAutoplayTracking(); // reviewer note item 13 — see question-audio.ts's own doc comment.
+      driver = new GameDriver(deck);
+      const seed = Math.floor(Math.random() * 1_000_000_000);
+      driver.start({ teamNames, N, firstTeam, seed, deckHash });
+      localPhase = 'playing';
+      render();
+    }
+
+    /** Shared by the decisive-auto timer AND the decisive-manual button
+     *  (F-4 fix) — one code path, so the two can never diverge. */
+    function commitDecisive(): void {
+      const ev = findGameEnded(driver.legal());
+      if (ev) driver.commit(ev);
+      render();
+    }
+
+    function render(): void {
+      const justUndone = suppressDecisiveAuto;
+      suppressDecisiveAuto = false;
+
+      if (decisiveTimer !== null) {
+        clearTimeout(decisiveTimer);
+        decisiveTimer = null;
+      }
+      if (cancelHandoff) {
+        cancelHandoff();
+        cancelHandoff = null;
+      }
+
+      if (localPhase !== 'editor') {
+        teardownEditor();
+        wrap.hidden = false;
+      }
+
+      if (localPhase === 'home') {
+        renderHomeScreen(wrap, {
+          questionCount: deck.length,
+          onStart: () => {
+            localPhase = 'team-setup';
+            render();
+          },
+          onOpenEditor: () => {
+            localPhase = 'editor';
+            render();
+          },
+        });
+        return;
+      }
+
+      if (localPhase === 'resume-prompt') {
+        // `resumableEvents` is guaranteed non-null here — it is set in the
+        // same branch that sets `localPhase = 'resume-prompt'` at startup,
+        // and nothing else can reach this branch.
+        const events = resumableEvents!;
+        // `fold()` — the same function `GameDriver`'s own constructor calls —
+        // read directly here only to show the context line; the actual
+        // resume (below) still goes through the one real `GameDriver`
+        // construction path, never a second reconstruction.
+        const resumedState = fold(events);
+        renderResumePromptScreen(wrap, {
+          teamNames: resumedState.teamNames,
+          positions: resumedState.positions,
+          N: resumedState.N,
+          onContinue: () => {
+            // Re-enter play with the EXACT stored log — `GameDriver`'s own
+            // constructor `fold()`s it, the same function that already
+            // regenerated `resumedState` above; no second reconstruction path.
+            driver = new GameDriver(deck, events);
+            localPhase = 'playing';
+            render();
+          },
+          onNewGame: () => {
+            clearSession(); // explicit operator choice — never silent (§6.3).
+            resumableEvents = null;
+            localPhase = 'home';
+            render();
+          },
+        });
+        return;
+      }
+
+      if (localPhase === 'deck-mismatch') {
+        renderDeckMismatchScreen(wrap, {
+          onNewGame: () => {
+            clearSession();
+            localPhase = 'home';
+            render();
+          },
+        });
+        return;
+      }
+
+      if (localPhase === 'editor') {
+        wrap.hidden = true;
+        if (!editorHost) {
+          editorHost = renderEditorShell(root, {
+            store,
+            onRequestBackup: () => saveBackupToDevice(store, GAME_TITLE),
+            onBack: () => {
+              // The author may have added/edited/deleted questions while in
+              // the editor — refresh the playable deck before returning, so
+              // the home screen's count and the next team-setup screen's
+              // readiness gate both reflect what was just authored, not a
+              // stale snapshot from cold start.
+              void refreshDeck().then(() => {
+                localPhase = 'home';
+                render();
+              });
+            },
+          });
+        }
+        return;
+      }
+
+      if (localPhase === 'team-setup') {
+        renderTeamSetupScreen(wrap, {
+          deckSize: deck.length,
+          onConfirm: ({ teamNames, N }) => {
+            pendingTeamNames = teamNames;
+            pendingN = N;
+            drawnFirstTeam = Math.random() < 0.5 ? 'A' : 'B';
+            localPhase = 'draw';
+            render();
+          },
           onBack: () => {
             localPhase = 'home';
             render();
           },
         });
+        return;
       }
-      return;
-    }
 
-    if (localPhase === 'team-setup') {
-      renderTeamSetupScreen(wrap, {
-        deckSize: deck.length,
-        onConfirm: ({ teamNames, N }) => {
-          pendingTeamNames = teamNames;
-          pendingN = N;
-          drawnFirstTeam = Math.random() < 0.5 ? 'A' : 'B';
-          localPhase = 'draw';
-          render();
-        },
-      });
-      return;
-    }
-
-    if (localPhase === 'draw') {
-      wrap.innerHTML = '';
-      const safe = document.createElement('div');
-      safe.className = 'stage-safe';
-      const screen = document.createElement('div');
-      screen.className = 'centered-screen';
-      const text = document.createElement('p');
-      text.className = 'type-winner-headline';
-      const winnerName = drawnFirstTeam === 'A' ? pendingTeamNames[0] : pendingTeamNames[1];
-      // Sourced verbatim from the ruling's own narrative ("الشاشة تقول
-      // فريق النخبة يبدأ") — not present in Appendix أ's literal-strings
-      // table, disclosed in the worklog.
-      text.textContent = `فريق ${winnerName} يبدأ`;
-      screen.append(text);
-      safe.append(screen);
-      wrap.append(safe);
-      window.setTimeout(() => {
-        startNewGame(pendingTeamNames, pendingN, drawnFirstTeam);
-      }, 1600);
-      return;
-    }
-
-    // localPhase === 'playing' — every screen below is driven by driver.state.
-    const state = driver.state;
-
-    if (state.currentQuestionId !== lastUiQuestionId) {
-      mediaUi = initialMediaUiState();
-      lastUiQuestionId = state.currentQuestionId;
-    }
-
-    if (state.stateId === 'FINISHED') {
-      const outcome = state.outcome ?? 'draw';
-      const reachedEnd = state.positions[0] >= state.N || state.positions[1] >= state.N;
-      renderEndingScreen(wrap, {
-        teamNames: state.teamNames,
-        positions: state.positions,
-        N: state.N,
-        outcome,
-        reachedEnd,
-        nextFirstTeam: computeNextFirstTeam(outcome, state.firstTeam),
-        canUndo: driver.canUndo(),
-        onNewGame: () => {
-          const nextFirst = computeNextFirstTeam(outcome, state.firstTeam);
-          startNewGame(state.teamNames, state.N, nextFirst);
-        },
-        onUndo: () => {
-          driver.undo();
-          render();
-        },
-      });
-      return;
-    }
-
-    if (
-      (state.stateId === 'TURN_START' || state.stateId === 'FINAL_BALANCING_TURN' || state.stateId === 'TIEBREAK') &&
-      state.currentQuestionId === null
-    ) {
-      const kind: HandoffKind =
-        state.stateId === 'FINAL_BALANCING_TURN' ? 'balancing' : state.stateId === 'TIEBREAK' ? 'tiebreak' : 'turn';
-      const readingTeam: TeamId = state.currentTeam === 'A' ? 'B' : 'A';
-      const leaderTeam: TeamId = state.positions[0] >= state.N ? 'A' : 'B';
-      const names: [string, string] =
-        kind === 'balancing'
-          ? [
-              leaderTeam === 'A' ? state.teamNames[0] : state.teamNames[1],
-              state.currentTeam === 'A' ? state.teamNames[0] : state.teamNames[1],
-            ]
-          : [
-              readingTeam === 'A' ? state.teamNames[0] : state.teamNames[1],
-              state.currentTeam === 'A' ? state.teamNames[0] : state.teamNames[1],
-            ];
-      cancelHandoff = renderTurnHandoff(wrap, {
-        kind,
-        names,
-        onDismiss: () => {
-          cancelHandoff = null;
-          const candidates = driver.legal();
-          const ev = findQuestionShown(candidates);
-          if (ev) driver.commit(ev);
-          render();
-        },
-      });
-      return;
-    }
-
-    if (state.stateId === 'QUESTION_SHOWN' || state.stateId === 'ANSWER_REVEALED') {
-      const question = deck.find((q) => q.id === state.currentQuestionId);
-      if (!question || !state.optionOrder) return;
-      const revealed = state.stateId === 'ANSWER_REVEALED';
-      const lastAnswer = revealed ? findLastAnswer(driver) : null;
-      // `stateId` is overwritten to 'QUESTION_SHOWN'/'ANSWER_REVEALED' by
-      // the reducer regardless of which of TURN_START/FINAL_BALANCING_TURN/
-      // TIEBREAK it came from (reducer.ts's QUESTION_SHOWN case) — so
-      // "is this the decider" is derived the same way the reducer itself
-      // derives which state TURN_PASSED lands on: both positions already
-      // at N (only true once inside the tiebreak; MOVE_APPLIED only ever
-      // clamps upward there, never below N again).
-      const isDecider = state.positions[0] >= state.N && state.positions[1] >= state.N;
-      renderQuestionScreen(wrap, {
-        question,
-        optionOrder: state.optionOrder,
-        teamNames: state.teamNames,
-        answeringTeam: state.currentTeam,
-        positions: state.positions,
-        revealed,
-        chosenOption: lastAnswer,
-        canUndo: driver.canUndo(),
-        mediaUi,
-        setMediaUi,
-        isDecider,
-        onChoose: (optionIndex) => {
-          const ev = findAnswerChosen(driver.legal(), optionIndex);
-          if (ev) driver.commit(ev);
-          render();
-        },
-        onNoAnswer: () => {
-          const ev = findNoAnswer(driver.legal());
-          if (ev) driver.commit(ev);
-          render();
-        },
-        onNext: () => {
-          const ev = findMoveApplied(driver.legal());
-          if (ev) driver.commit(ev);
-          render();
-        },
-        onUndo: () => {
-          driver.undo();
-          render();
-        },
-      });
-      return;
-    }
-
-    if (state.stateId === 'PROGRESSION_APPLIED') {
-      const candidates = driver.legal();
-      let mode: MazeBeatMode = 'continue';
-      if (isAudienceDecision(candidates)) mode = 'audience-decision';
-      else if (isDecisiveEnding(candidates)) mode = 'decisive-auto';
-
-      renderMazeBeat(wrap, {
-        N: state.N,
-        positions: state.positions,
-        teamNames: state.teamNames,
-        mode,
-        canUndo: driver.canUndo(),
-        onContinue: () => {
-          const ev = findTurnPassed(driver.legal());
-          if (ev) driver.commit(ev);
-          render();
-        },
-        onDeclare: (outcome) => {
-          const ev = findGameEnded(driver.legal(), outcome);
-          if (ev) driver.commit(ev);
-          render();
-        },
-        onUndo: () => {
-          driver.undo();
-          render();
-        },
-      });
-
-      if (mode === 'decisive-auto') {
-        decisiveTimer = setTimeout(() => {
-          decisiveTimer = null;
-          const ev = findGameEnded(driver.legal());
-          if (ev) driver.commit(ev);
-          render();
-        }, 900);
+      if (localPhase === 'draw') {
+        wrap.innerHTML = '';
+        const safe = document.createElement('div');
+        safe.className = 'stage-safe';
+        const screen = document.createElement('div');
+        screen.className = 'centered-screen';
+        const text = document.createElement('p');
+        text.className = 'type-winner-headline';
+        const winnerName = drawnFirstTeam === 'A' ? pendingTeamNames[0] : pendingTeamNames[1];
+        // Sourced verbatim from the ruling's own narrative ("الشاشة تقول
+        // فريق النخبة يبدأ") — not present in Appendix أ's literal-strings
+        // table, disclosed in the worklog.
+        text.textContent = `فريق ${winnerName} يبدأ`;
+        screen.append(text);
+        safe.append(screen);
+        wrap.append(safe);
+        window.setTimeout(() => {
+          startNewGame(pendingTeamNames, pendingN, drawnFirstTeam);
+        }, 1600);
+        return;
       }
-      return;
+
+      // localPhase === 'playing' — every screen below is driven by driver.state.
+      const state = driver.state;
+
+      if (state.currentQuestionId !== lastUiQuestionId) {
+        mediaUi = initialMediaUiState();
+        lastUiQuestionId = state.currentQuestionId;
+      }
+
+      // F-2 defense-in-depth (adversarial review, 2026-08-08 — worklog-B5.md):
+      // the readiness gate in `team-setup.ts` now refuses to start a game the
+      // deck cannot support at all, which is the ROOT fix — a game should
+      // never reach this point with an empty legal-events set outside
+      // `FINISHED`. This is a second, independent guard: if it is ever
+      // reached anyway (a future rule change, a bug elsewhere), the host
+      // gets a truthful, calm screen with a real way out instead of a
+      // same-screen re-render loop with no exit. `legal()` is pure/cheap —
+      // calling it once here, before dispatching to the per-state branches
+      // below (which each call it again for their own purposes), is not a
+      // meaningful cost.
+      if (state.stateId !== 'FINISHED' && driver.legal().length === 0) {
+        renderDeadEndScreen(wrap, {
+          onContinue: () => {
+            localPhase = 'home';
+            render();
+          },
+        });
+        return;
+      }
+
+      if (state.stateId === 'FINISHED') {
+        const outcome = state.outcome ?? 'draw';
+        const reachedEnd = state.positions[0] >= state.N || state.positions[1] >= state.N;
+        renderEndingScreen(wrap, {
+          teamNames: state.teamNames,
+          positions: state.positions,
+          N: state.N,
+          outcome,
+          reachedEnd,
+          nextFirstTeam: computeNextFirstTeam(outcome, state.firstTeam),
+          canUndo: driver.canUndo(),
+          onNewGame: () => {
+            const nextFirst = computeNextFirstTeam(outcome, state.firstTeam);
+            startNewGame(state.teamNames, state.N, nextFirst);
+          },
+          onUndo: () => {
+            suppressDecisiveAuto = true;
+            driver.undo();
+            render();
+          },
+        });
+        return;
+      }
+
+      if (
+        (state.stateId === 'TURN_START' || state.stateId === 'FINAL_BALANCING_TURN' || state.stateId === 'TIEBREAK') &&
+        state.currentQuestionId === null
+      ) {
+        const kind: HandoffKind =
+          state.stateId === 'FINAL_BALANCING_TURN' ? 'balancing' : state.stateId === 'TIEBREAK' ? 'tiebreak' : 'turn';
+        const readingTeam: TeamId = state.currentTeam === 'A' ? 'B' : 'A';
+        const leaderTeam: TeamId = state.positions[0] >= state.N ? 'A' : 'B';
+        const names: [string, string] =
+          kind === 'balancing'
+            ? [
+                leaderTeam === 'A' ? state.teamNames[0] : state.teamNames[1],
+                state.currentTeam === 'A' ? state.teamNames[0] : state.teamNames[1],
+              ]
+            : [
+                readingTeam === 'A' ? state.teamNames[0] : state.teamNames[1],
+                state.currentTeam === 'A' ? state.teamNames[0] : state.teamNames[1],
+              ];
+        cancelHandoff = renderTurnHandoff(wrap, {
+          kind,
+          names,
+          onDismiss: () => {
+            cancelHandoff = null;
+            const candidates = driver.legal();
+            const ev = findQuestionShown(candidates);
+            if (ev) driver.commit(ev);
+            render();
+          },
+        });
+        return;
+      }
+
+      if (state.stateId === 'QUESTION_SHOWN' || state.stateId === 'ANSWER_REVEALED') {
+        const question = deck.find((q) => q.id === state.currentQuestionId);
+        if (!question || !state.optionOrder) return;
+        const revealed = state.stateId === 'ANSWER_REVEALED';
+        const lastAnswer = revealed ? findLastAnswer(driver) : null;
+        // `stateId` is overwritten to 'QUESTION_SHOWN'/'ANSWER_REVEALED' by
+        // the reducer regardless of which of TURN_START/FINAL_BALANCING_TURN/
+        // TIEBREAK it came from (reducer.ts's QUESTION_SHOWN case) — so
+        // "is this the decider" is derived the same way the reducer itself
+        // derives which state TURN_PASSED lands on: both positions already
+        // at N (only true once inside the tiebreak; MOVE_APPLIED only ever
+        // clamps upward there, never below N again).
+        const isDecider = state.positions[0] >= state.N && state.positions[1] >= state.N;
+        renderQuestionScreen(wrap, {
+          question,
+          optionOrder: state.optionOrder,
+          teamNames: state.teamNames,
+          answeringTeam: state.currentTeam,
+          positions: state.positions,
+          revealed,
+          chosenOption: lastAnswer,
+          canUndo: driver.canUndo(),
+          mediaUi,
+          setMediaUi,
+          isDecider,
+          resolveMediaUrl,
+          onChoose: (optionIndex) => {
+            const ev = findAnswerChosen(driver.legal(), optionIndex);
+            if (ev) driver.commit(ev);
+            render();
+          },
+          onNoAnswer: () => {
+            const ev = findNoAnswer(driver.legal());
+            if (ev) driver.commit(ev);
+            render();
+          },
+          onNext: () => {
+            const ev = findMoveApplied(driver.legal());
+            if (ev) driver.commit(ev);
+            render();
+          },
+          onUndo: () => {
+            suppressDecisiveAuto = true;
+            driver.undo();
+            render();
+          },
+        });
+        return;
+      }
+
+      if (state.stateId === 'PROGRESSION_APPLIED') {
+        const candidates = driver.legal();
+        let mode: MazeBeatMode = 'continue';
+        if (isAudienceDecision(candidates)) mode = 'audience-decision';
+        else if (isDecisiveEnding(candidates)) mode = justUndone ? 'decisive-manual' : 'decisive-auto';
+
+        renderMazeBeat(wrap, {
+          N: state.N,
+          positions: state.positions,
+          teamNames: state.teamNames,
+          mode,
+          canUndo: driver.canUndo(),
+          onContinue: () => {
+            const ev = findTurnPassed(driver.legal());
+            if (ev) driver.commit(ev);
+            render();
+          },
+          onDeclare: (outcome) => {
+            const ev = findGameEnded(driver.legal(), outcome);
+            if (ev) driver.commit(ev);
+            render();
+          },
+          onConfirmDecisive: commitDecisive,
+          onUndo: () => {
+            suppressDecisiveAuto = true;
+            driver.undo();
+            render();
+          },
+        });
+
+        if (mode === 'decisive-auto') {
+          decisiveTimer = setTimeout(() => {
+            decisiveTimer = null;
+            commitDecisive();
+          }, 900);
+        }
+        return;
+      }
     }
+
+    render();
   }
-
-  render();
 }
 
 /**
@@ -392,8 +528,19 @@ export function mountApp(root: HTMLElement): void {
  * a normal scrolling document, and `.stage-root` is `position: fixed` with
  * `overflow: hidden` clipped to the 16:9 canvas, which would silently clip
  * a question list of any real length.
+ *
+ * `store`/`onRequestBackup` (adversarial review F-1 fix, 2026-08-08):
+ * passes the SAME `DraftStore` instance `mountApp` already loaded (so the
+ * editor's writes are immediately visible to `refreshDeck()` without a
+ * second IndexedDB round trip), and a real backup handler — closing the
+ * "dead save button" defect the review found (`mountEditor` was always
+ * called with no options at all, so `triggerBackup()` returned immediately
+ * on `if (!options.onRequestBackup) return;`).
  */
-function renderEditorShell(root: HTMLElement, opts: { onBack: () => void }): HTMLElement {
+function renderEditorShell(
+  root: HTMLElement,
+  opts: { store: DraftStore; onRequestBackup: () => ReturnType<typeof saveBackupToDevice>; onBack: () => void },
+): HTMLElement {
   const shell = document.createElement('div');
   shell.className = 'editor-shell';
   shell.dir = 'rtl';
@@ -419,9 +566,38 @@ function renderEditorShell(root: HTMLElement, opts: { onBack: () => void }): HTM
   // into `editorContainer` once its own `store.load()` resolves, same as
   // any other consumer of `mountEditor` (WL-C's own tests await it the same
   // way from an already-mounted container).
-  void mountEditor(editorContainer);
+  void mountEditor(editorContainer, { store: opts.store, onRequestBackup: opts.onRequestBackup });
 
   return shell;
+}
+
+/**
+ * F-2 defense-in-depth fallback (worklog-B5.md) — reuses the EXISTING
+ * literal Appendix أ "any unexpected error" copy (`stage-ux-investigation.md`
+ * §4.7: «حدث خلل بسيط. تم حفظ تقدّم اللعبة — اضغط للمتابعة.» / one button
+ * «تابع») rather than inventing new copy for a state that should now be
+ * structurally unreachable (the `team-setup.ts` readiness gate is the real
+ * fix). Routes «تابع» back to the home screen — the only place guaranteed
+ * to render something legal regardless of what produced the dead end.
+ */
+function renderDeadEndScreen(container: HTMLElement, opts: { onContinue: () => void }): HTMLElement {
+  container.innerHTML = '';
+  const safe = document.createElement('div');
+  safe.className = 'stage-safe';
+  const screen = document.createElement('div');
+  screen.className = 'centered-screen';
+  const text = document.createElement('p');
+  text.className = 'type-question';
+  text.textContent = 'حدث خلل بسيط. تم حفظ تقدّم اللعبة — اضغط للمتابعة.';
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'op-button primary type-operator-button';
+  btn.textContent = 'تابع';
+  btn.addEventListener('click', opts.onContinue);
+  screen.append(text, btn);
+  safe.append(screen);
+  container.append(safe);
+  return safe;
 }
 
 /** The chosen option for the just-revealed question, read from the event

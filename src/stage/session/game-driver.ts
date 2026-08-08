@@ -17,7 +17,7 @@
 import type { GameEvent, GameState, Outcome, Question, TeamId } from '../../contracts';
 import { fold, undo as coreUndo, commit as coreCommit } from '../../core/fold';
 import { legalEvents, type GameContext } from '../../core/legal';
-import { saveSession, clearSession } from '../../core/session-store';
+import { saveSession } from '../../core/session-store';
 
 export interface StartParams {
   teamNames: [string, string];
@@ -53,18 +53,32 @@ export class GameDriver {
    * operation below (`start`, a successfully applied `commit`, `undo`)
    * routes through here, so "the game in progress is being persisted as it
    * is played" is true by construction, not by remembering to call it at
-   * each call site. A `FINISHED` state clears the stored session instead of
-   * saving it — `checkResume()` already treats a stored `FINISHED` log as
-   * `{ kind: 'none' }` (nothing left to resume into), so this is hygiene
-   * (no stale finished-game payload lingering in `localStorage`), not a
-   * behaviour change; disclosed in the worklog as a deliberate choice.
+   * each call site.
+   *
+   * **F-4 fix (adversarial review, 2026-08-08 — worklog-B5.md):** this used
+   * to clear the stored session the instant `FINISHED` was reached. In
+   * practice that meant: reach `FINISHED` -> session cleared -> tap «تراجُع»
+   * -> a shorter log re-saved -> the (buggy) decisive-auto timer re-commits
+   * `GAME_ENDED` -> session cleared again. Net result: at the one moment a
+   * host most needs a safety net (he just declared the wrong winner in
+   * front of guests), there was no persisted record at all — a stray reload
+   * lost everything, and in-memory undo was the *only* recovery path. This
+   * now always saves the current log, `FINISHED` included, removing that
+   * churn. **Disclosed limitation, not silently claimed complete:**
+   * `checkResume()` (`src/core/session-store.ts:136`, WL-A-owned — not this
+   * file) still classifies a stored `FINISHED` log as `{ kind: 'none' }`,
+   * so a real page reload while sitting on the ending screen still will
+   * NOT resume back into it — that half of the fix needs a WL-A change and
+   * is out of this file's ownership. What this change does deliver: the log
+   * is no longer actively deleted-then-recreated-then-deleted-again across
+   * the undo/re-commit dance, and a fresh game's first `GAME_STARTED`
+   * (`start()`, above) naturally overwrites whatever the previous game left
+   * behind the moment a new one actually begins — so the old session is
+   * kept for exactly as long as the host is still on (or might return to,
+   * via undo) the ending screen, and no longer.
    */
   private persist(): void {
-    if (this.cachedState.stateId === 'FINISHED') {
-      clearSession();
-    } else {
-      saveSession(this.events);
-    }
+    saveSession(this.events);
   }
 
   get state(): GameState {

@@ -1,0 +1,128 @@
+{
+  "zeroQuestionHome": {
+    "buttons": [
+      "أسئلتي",
+      "ابدأ اللعبة",
+      "تراجُع",
+      "كيف أنشر لعبتي؟",
+      "إغلاق"
+    ],
+    "guidance": "لا توجد أسئلة بعد — أضف أسئلتك من «أسئلتي» قبل أن تبدأ اللعبة.",
+    "editorIsPrimary": true,
+    "startIsPrimary": false
+  },
+  "f3RefuseBand": {
+    "bandLine": "أسئلتك 18 — لا تكفي بعد لأي مسار. أضف المزيد من «أسئلتي».",
+    "confirmDisabled": true,
+    "selectedN": 10
+  },
+  "f3Expected": {
+    "band10": "refuse",
+    "maxGreen": 4
+  },
+  "greenBandEnabled": {
+    "confirmDisabled": false,
+    "bandLine": ""
+  },
+  "authoredMediaReachesStage": {
+    "found": true,
+    "imgUrlIsRealBlob": true,
+    "audUrlIsRealBlob": true,
+    "imgBytesLength": 68,
+    "audBytesLength": 24044,
+    "imageMatchesDraftStore": true,
+    "audioMatchesDraftStore": true,
+    "imgPngSignatureOk": true,
+    "audRiffSignatureOk": true
+  },
+  "backupButtonWired": {
+    "gotDownloadEvent": true,
+    "suggestedFilename": "nouf-20260808-161557.zip",
+    "error": null
+  },
+  "livePlaythrough": {
+    "steps": 193,
+    "reachedEnding": true,
+    "seenQuestionTexts": [
+      "سؤال المؤلف الحي رقم 13",
+      "سؤال المؤلف الحي رقم 18",
+      "سؤال المؤلف الحي رقم 11",
+      "سؤال المؤلف الحي رقم 20",
+      "سؤال المؤلف الحي رقم 21",
+      "سؤال المؤلف الحي رقم 19",
+      "سؤال المؤلف الحي رقم 16",
+      "سؤال المؤلف الحي رقم 3",
+      "سؤال المؤلف الحي رقم 6",
+      "سؤال المؤلف الحي رقم 2",
+      "سؤال المؤلف الحي رقم 5",
+      "سؤال المؤلف الحي رقم 25",
+      "سؤال المؤلف الحي رقم 10",
+      "سؤال المؤلف الحي رقم 7",
+      "سؤال المؤلف الحي رقم 1",
+      "سؤال المؤلف الحي رقم 14",
+      "سؤال المؤلف الحي رقم 22",
+      "سؤال المؤلف الحي رقم 9",
+      "سؤال المؤلف الحي رقم 8",
+      "سؤال المؤلف الحي رقم 17",
+      "سؤال المؤلف الحي رقم 4",
+      "سؤال المؤلف الحي رقم 15",
+      "سؤال المؤلف الحي رقم 12",
+      "سؤال المؤلف الحي رقم 24",
+      "سؤال المؤلف الحي رقم 23"
+    ]
+  },
+  "f4UndoNoSelfRevert": {
+    "trace": [
+      {
+        "tMs": 0,
+        "onEndingScreen": false,
+        "hasManualConfirm": true
+      },
+      {
+        "tMs": 400,
+        "onEndingScreen": false,
+        "hasManualConfirm": true
+      },
+      {
+        "tMs": 800,
+        "onEndingScreen": false,
+        "hasManualConfirm": true
+      },
+      {
+        "tMs": 1200,
+        "onEndingScreen": false,
+        "hasManualConfirm": true
+      },
+      {
+        "tMs": 1600,
+        "onEndingScreen": false,
+        "hasManualConfirm": true
+      },
+      {
+        "tMs": 2000,
+        "onEndingScreen": false,
+        "hasManualConfirm": true
+      },
+      {
+        "tMs": 2400,
+        "onEndingScreen": false,
+        "hasManualConfirm": true
+      },
+      {
+        "tMs": 2800,
+        "onEndingScreen": false,
+        "hasManualConfirm": true
+      }
+    ],
+    "everSelfReverted": false
+  },
+  "f4ManualConfirmWorks": true,
+  "importThenPlay": {
+    "wipedCountWasZero": true,
+    "importedQuestionCount": 20,
+    "deckAfterImportCount": 20,
+    "firstQuestionText": "سؤال مستورد رقم 1",
+    "allTextsAreImportedOnes": true
+  },
+  "importThenPlayHomeCount": "أسئلتك: 20"
+}

@@ -37,9 +37,8 @@ function buildImageEl(url: string, className: string, onError: () => void): HTML
   img.src = url;
   img.alt = '';
   // Constraint row 12: every image is loading="lazy". Meaningful for real
-  // network-fetched media — the demo deck's placeholder images are data:
-  // URLs (disclosed in placeholder-media.ts); the attribute is still
-  // present and correct for real authored packs.
+  // author-uploaded media served as object URLs; harmless on any other URL
+  // kind (a test fixture's data: URL, etc.).
   img.loading = 'lazy';
   img.className = className;
   img.addEventListener('error', onError);

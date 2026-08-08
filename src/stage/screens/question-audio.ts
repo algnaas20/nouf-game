@@ -66,6 +66,21 @@ let activeRafId: number | null = null;
  */
 const autoplayAttemptedIds = new Set<string>();
 
+/**
+ * Reviewer note item 13 (adversarial review, 2026-08-08 — worklog-B5.md):
+ * `autoplayAttemptedIds` is a module-level `Set` that lived for the whole
+ * page lifetime and was never cleared — so in the SECOND game of an evening
+ * (`app.ts#startNewGame`, called again from the ending screen's «لعبة
+ * جديدة»), every audio question id had already been "attempted" during
+ * game 1 and none would ever auto-play again; the host would have to
+ * notice and tap «اضغط لتشغيل المقطع» every time, a real behaviour drift
+ * between game 1 and game 2 no test covered. Called once from
+ * `startNewGame`, before the new `GameDriver` is used.
+ */
+export function resetAutoplayTracking(): void {
+  autoplayAttemptedIds.clear();
+}
+
 function getAudioCtx(): AudioContext | null {
   const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!Ctor) return null;

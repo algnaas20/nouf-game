@@ -3,7 +3,7 @@ import { formatDigits } from '../format-digits';
 import { buildUndoCorner } from '../undo-corner';
 import { buildMazeView } from './maze-view';
 
-export type MazeBeatMode = 'continue' | 'audience-decision' | 'decisive-auto';
+export type MazeBeatMode = 'continue' | 'audience-decision' | 'decisive-auto' | 'decisive-manual';
 
 export interface MazeBeatParams {
   N: number;
@@ -14,6 +14,18 @@ export interface MazeBeatParams {
   onDeclare: (outcome: Outcome) => void;
   canUndo: boolean;
   onUndo: () => void;
+  /**
+   * F-4 fix (adversarial review, 2026-08-08 — worklog-B5.md): required only
+   * for `mode: 'decisive-manual'`. `'decisive-auto'` still auto-commits the
+   * single legal `GAME_ENDED` candidate after a short delay (unchanged,
+   * normal-play behaviour); `app.ts` switches to `'decisive-manual'`
+   * instead, for exactly one render pass, whenever this beat was reached by
+   * an undo (popping the just-declared ending) rather than by forward play
+   * — so undoing a wrong final answer no longer silently re-commits the
+   * same result ~900ms later. This mode renders an explicit button instead
+   * of arming the timer; a real tap is required to end the game again.
+   */
+  onConfirmDecisive?: () => void;
 }
 
 function stepCard(teamName: string, position: number, N: number, lane: 'a' | 'b'): HTMLElement {
@@ -110,6 +122,16 @@ export function renderMazeBeat(container: HTMLElement, p: MazeBeatParams): void 
       nextBtn.textContent = 'السؤال التالي';
       nextBtn.addEventListener('click', p.onContinue);
       barEnd.append(nextBtn);
+    } else if (p.mode === 'decisive-manual') {
+      // Composed — reuses the app's existing generic "proceed" register
+      // (§4.7's «اضغط للمتابعة»), not a literal Appendix أ string for this
+      // exact moment (none exists). Disclosed in worklog-B5.md.
+      const confirmBtn = document.createElement('button');
+      confirmBtn.type = 'button';
+      confirmBtn.className = 'op-button primary type-operator-button';
+      confirmBtn.textContent = 'متابعة';
+      confirmBtn.addEventListener('click', () => p.onConfirmDecisive?.());
+      barEnd.append(confirmBtn);
     }
     bar.append(barEnd);
     safe.append(bar);

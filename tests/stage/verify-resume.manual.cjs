@@ -26,11 +26,27 @@ const URL = process.env.STAGE_URL || 'http://localhost:3011/';
 const OUT_DIR = path.join(__dirname, '..', '..', 'verify-out');
 fs.mkdirSync(OUT_DIR, { recursive: true });
 
+/**
+ * D-25 / F-1 (worklog-B5.md, 2026-08-08): no bundled demo deck any more —
+ * seeds a real authored deck through the real `DraftStore` first, then
+ * reloads so `mountApp`'s own deck loader picks it up, before driving home
+ * -> team-setup -> confirm (team-setup's "ابدأ" is disabled on an empty
+ * deck — the readiness gate, task 3).
+ */
 async function playToAQuestion(page) {
   await page.goto(URL);
+  await page.evaluate(async () => {
+    const { createDraftStore } = await import('/src/editor/draft-store.ts');
+    const store = createDraftStore();
+    await store.load();
+    for (let i = 0; i < 25; i++) {
+      await store.addQuestion({ text: `سؤال الاستئناف رقم ${i + 1}`, options: ['أ', 'ب', 'ج', 'د'], correctIndex: 0 });
+    }
+  });
+  await page.reload();
   await page.evaluate(() => document.fonts.ready);
   await page.click('button:has-text("ابدأ اللعبة")');
-  await page.click('button:has-text("ابدأ")');
+  await page.click('button:has-text("ابدأ"):not(:has-text("اللعبة"))');
   await page.waitForTimeout(1700 + 1700); // draw + handoff, both auto
 }
 

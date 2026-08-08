@@ -24,6 +24,30 @@ function walk(dir) {
   return out;
 }
 
+/**
+ * D-25 / F-1 (worklog-B5.md, 2026-08-08): no bundled demo deck any more —
+ * «ابدأ» on team-setup is disabled on an empty deck (the readiness gate,
+ * task 3). Every scenario below that needs a real playable game now seeds
+ * one first, through the real `DraftStore` (same technique
+ * verify-pack.manual.cjs's re-pointed V24 and verify-b2.manual.cjs's
+ * v1Recheck use), then reloads so `mountApp`'s own deck loader picks it up,
+ * then drives home -> team-setup -> confirm exactly as before.
+ */
+async function seedDeckThenStartGame(page) {
+  await page.evaluate(async () => {
+    const { createDraftStore } = await import('/src/editor/draft-store.ts');
+    const store = createDraftStore();
+    await store.load();
+    for (let i = 0; i < 25; i++) {
+      await store.addQuestion({ text: `سؤال B3 رقم ${i + 1}`, options: ['أ', 'ب', 'ج', 'د'], correctIndex: 0 });
+    }
+  });
+  await page.reload();
+  await page.waitForTimeout(200);
+  await page.click('button:has-text("ابدأ اللعبة")');
+  await page.click('button:has-text("ابدأ"):not(:has-text("اللعبة"))');
+}
+
 async function main() {
   const results = {};
 
@@ -161,8 +185,7 @@ async function main() {
   {
     const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
     await page.goto(URL);
-    await page.click('text=ابدأ اللعبة');
-    await page.click('text=ابدأ');
+    await seedDeckThenStartGame(page);
     await page.waitForTimeout(1800);
     try { await page.click('.turn-handoff-overlay', { timeout: 1000 }); } catch {}
     await page.waitForTimeout(300);
@@ -241,8 +264,7 @@ async function main() {
     results.v12Structural = structural;
 
     // Real screenshot, colour removed via CSS filter, of a live maze-beat screen.
-    await page.click('text=ابدأ اللعبة');
-    await page.click('text=ابدأ');
+    await seedDeckThenStartGame(page);
     await page.waitForTimeout(1800);
     for (let i = 0; i < 6; i++) {
       const hasOverlay = await page.evaluate(() => !!document.querySelector('.turn-handoff-overlay'));
@@ -270,12 +292,26 @@ async function main() {
   }
 
   // ---------- V24: actions from open to first question ----------
+  // D-25 / F-1: measured against an already-authored deck (task 2's whole
+  // point — see verify-pack.manual.cjs's own re-pointed V24 comment). The
+  // seeding step itself is not counted in `actions` (a real host authored
+  // it days earlier, not as part of the 2-tap play-night flow).
   {
     const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
     let actions = 0;
     await page.goto(URL);
-    await page.click('text=ابدأ اللعبة'); actions++;
-    await page.click('text=ابدأ'); actions++;
+    await page.evaluate(async () => {
+      const { createDraftStore } = await import('/src/editor/draft-store.ts');
+      const store = createDraftStore();
+      await store.load();
+      for (let i = 0; i < 25; i++) {
+        await store.addQuestion({ text: `سؤال B3 V24 رقم ${i + 1}`, options: ['أ', 'ب', 'ج', 'د'], correctIndex: 0 });
+      }
+    });
+    await page.reload();
+    await page.waitForTimeout(200);
+    await page.click('button:has-text("ابدأ اللعبة")'); actions++;
+    await page.click('button:has-text("ابدأ"):not(:has-text("اللعبة"))'); actions++;
     // No further taps — draw + hand-off must clear on their own.
     await page.waitForTimeout(1700 + 1700);
     const reachedQuestion = await page.evaluate(() => !!document.querySelector('.question-text, .audio-question-text, .image-question-overlay, .image-beat2'));

@@ -268,7 +268,7 @@ async function main() {
 
       // Image column vs options column, Beat 2 (image-beat2's own grid).
       const imgMod = await import('/src/stage/screens/question-image.ts');
-      const placeholder = await import('/src/stage/session/placeholder-media.ts');
+      const placeholder = await import('/tests/stage/fixtures/placeholder-media.ts');
       appRoot.innerHTML = '';
       const c2 = document.createElement('div'); c2.className = 'stage-root'; appRoot.appendChild(c2);
       imgMod.renderImageQuestionScreen(c2, {
@@ -465,7 +465,7 @@ async function main() {
       const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
       await page.goto(URL);
       floor[aspect] = await page.evaluate(async (aspect) => {
-        const placeholder = await import('/src/stage/session/placeholder-media.ts');
+        const placeholder = await import('/tests/stage/fixtures/placeholder-media.ts');
         const mod = await import('/src/stage/screens/question-image.ts');
         const appRoot = document.getElementById('app');
         appRoot.innerHTML = '';
@@ -641,7 +641,7 @@ async function main() {
     const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
     await page.goto(URL);
     results.V22 = await page.evaluate(async () => {
-      const placeholder = await import('/src/stage/session/placeholder-media.ts');
+      const placeholder = await import('/tests/stage/fixtures/placeholder-media.ts');
       const mod = await import('/src/stage/screens/question-audio.ts');
       const appRoot = document.getElementById('app');
       appRoot.innerHTML = '';
@@ -673,12 +673,29 @@ async function main() {
   };
 
   // ================= V24 — cold start, ≤2 actions =================
+  // D-25 / F-1 (worklog-B5.md, 2026-08-08): `mountApp` no longer ships a
+  // bundled demo deck — a truly cold start now lands on the zero-question
+  // home screen (V24's own re-aimed scope: see the "no questions yet"
+  // primary path, task 2). "2 actions to the first question" is now
+  // necessarily measured against an ALREADY-AUTHORED deck (a host who
+  // authored before play night, D-25's whole point) — seeded here via the
+  // real `DraftStore`, not the deleted demo deck.
   {
     const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
-    let actions = 0;
     await page.goto(URL);
-    await page.click('text=ابدأ اللعبة'); actions++;
-    await page.click('text=ابدأ'); actions++;
+    await page.evaluate(async () => {
+      const { createDraftStore } = await import('/src/editor/draft-store.ts');
+      const store = createDraftStore();
+      await store.load();
+      for (let i = 0; i < 25; i++) {
+        await store.addQuestion({ text: `سؤال V24 رقم ${i + 1}`, options: ['أ', 'ب', 'ج', 'د'], correctIndex: 0 });
+      }
+    });
+    await page.reload();
+    await page.waitForTimeout(200);
+    let actions = 0;
+    await page.click('button:has-text("ابدأ اللعبة")'); actions++;
+    await page.click('button:has-text("ابدأ"):not(:has-text("اللعبة"))'); actions++;
     await page.waitForTimeout(1700 + 1700);
     const reachedQuestion = await page.evaluate(() => !!document.querySelector('.question-text, .audio-question-text, .image-question-overlay, .image-beat2'));
     results.V24 = { actions, reachedQuestion };

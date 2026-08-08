@@ -1,19 +1,19 @@
 /**
- * Runtime-synthesized placeholder media for the demo deck's image/audio
- * questions. This worktree has no content pipeline yet — `src/media`
- * (intake/downscaling) is WL-C's and `src/pack` (the ZIP reader that would
- * hand real author-supplied blobs to the stage) is WL-D's, neither wired in
- * here. This module is NOT that mechanism and must never be mistaken for
- * it: it exists only so the image/audio question SCREENS (layout, the
- * 620x620 floor, the two-beat flow, the hidden-until-ended audio phasing,
- * the level meter, failure states) can be exercised end to end with real
- * `<img>`/`<audio>` elements today. Disclosed in the worklog.
+ * Runtime-synthesized placeholder media for `fixture-deck.ts` and the manual
+ * verification scripts under `tests/stage/**`. **Test-only** — relocated
+ * here from `src/stage/session/placeholder-media.ts` (deleted, D-25 /
+ * worklog-B5.md, 2026-08-08): the product no longer ships or plays a
+ * bundled demo/placeholder deck, and this generator must never be imported
+ * from `src/**` again. It exists only so the manual Playwright drivers can
+ * exercise the image/audio question SCREENS (layout, the 620x620 floor, the
+ * two-beat flow, the hidden-until-ended audio phasing, the level meter,
+ * failure states) with real `<img>`/`<audio>` elements, without depending on
+ * a real author's IndexedDB-stored blobs for every check.
  *
  * Images are returned as `data:image/png` URLs (canvas-drawn). Audio is
  * returned as a `data:audio/wav` URL (a synthesized tone with a fade
  * envelope) — deliberately a data URL, not an object URL, so there is
- * nothing to revoke/leak (PH-C2's object-URL-per-question concern is about
- * the real media pipeline, not this fixture generator).
+ * nothing to revoke/leak.
  */
 
 export type ImageAspect = 'landscape' | 'portrait' | 'square';

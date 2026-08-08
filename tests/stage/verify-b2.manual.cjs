@@ -242,7 +242,7 @@ async function main() {
       const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
       await page.goto(URL);
       floor[aspect] = await page.evaluate(async (aspect) => {
-        const placeholder = await import('/src/stage/session/placeholder-media.ts');
+        const placeholder = await import('/tests/stage/fixtures/placeholder-media.ts');
         const mod = await import('/src/stage/screens/question-image.ts');
         const appRoot = document.getElementById('app');
         appRoot.innerHTML = '';
@@ -280,7 +280,7 @@ async function main() {
     const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
     await page.goto(URL);
     results.audioTruthfulness = await page.evaluate(async () => {
-      const placeholder = await import('/src/stage/session/placeholder-media.ts');
+      const placeholder = await import('/tests/stage/fixtures/placeholder-media.ts');
       const mod = await import('/src/stage/screens/question-audio.ts');
       const appRoot = document.getElementById('app');
       appRoot.innerHTML = '';
@@ -325,7 +325,7 @@ async function main() {
     const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
     await page.goto(URL);
     results.mediaAttrs = await page.evaluate(async () => {
-      const placeholder = await import('/src/stage/session/placeholder-media.ts');
+      const placeholder = await import('/tests/stage/fixtures/placeholder-media.ts');
       const imgMod = await import('/src/stage/screens/question-image.ts');
       const audioMod = await import('/src/stage/screens/question-audio.ts');
       const appRoot = document.getElementById('app');
@@ -363,8 +363,22 @@ async function main() {
   {
     const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
     await page.goto(URL);
-    await page.click('text=ابدأ اللعبة');
-    await page.click('text=ابدأ');
+    // D-25 / F-1 (worklog-B5.md): no bundled demo deck any more — «ابدأ» is
+    // disabled on an empty deck (the readiness gate, task 3). Seed a real
+    // authored deck first via the real DraftStore, same technique
+    // verify-pack.manual.cjs's re-pointed V24 uses.
+    await page.evaluate(async () => {
+      const { createDraftStore } = await import('/src/editor/draft-store.ts');
+      const store = createDraftStore();
+      await store.load();
+      for (let i = 0; i < 25; i++) {
+        await store.addQuestion({ text: `سؤال إعادة فحص V1 رقم ${i + 1}`, options: ['أ', 'ب', 'ج', 'د'], correctIndex: 0 });
+      }
+    });
+    await page.reload();
+    await page.waitForTimeout(200);
+    await page.click('button:has-text("ابدأ اللعبة")');
+    await page.click('button:has-text("ابدأ"):not(:has-text("اللعبة"))');
     await page.waitForTimeout(1800);
     await page.evaluate(() => document.fonts.ready);
     // dismiss handoff to reach a real question screen

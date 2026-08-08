@@ -1,14 +1,24 @@
 /**
- * PH-B2/B3 demo deck — a self-contained, hand-authored question set that
- * exercises all three media kinds so the real `src/core` state machine
- * (deck bands, R-b, the decider, exhaustion) can be driven and observed
- * end to end in this worktree, ahead of WL-C's editor/pack pipeline being
- * wired in. 30 questions: green band at N=6 (needs ≥24) and N=10 (needs
- * ≥38 is NOT met — 30 lands in "warn", which is deliberately kept rather
- * than padded to green, so the deck-band warning copy is also exercised by
- * a real playthrough, not just a unit fixture) — disclosed in the worklog.
+ * A self-contained, hand-authored question set for `tests/stage/**`'s
+ * manual verification drivers — exercises all three media kinds so the
+ * screen components (`renderQuestionScreen` and friends) can be driven and
+ * observed directly, WITHOUT a real author's IndexedDB draft. **Test-only.**
+ *
+ * Relocated here from `src/stage/session/demo-deck.ts` (deleted, D-25 /
+ * worklog-B5.md, 2026-08-08) — the product no longer ships or plays a
+ * bundled demo deck; `src/stage/app.ts` now builds its deck exclusively
+ * from the author's own `DraftStore` (see `seed-fixture-draft.ts` in this
+ * same directory for the equivalent fixture, seeded through THAT real path,
+ * for scripts that drive the live app end to end rather than calling a
+ * screen-render function directly).
+ *
+ * 24 questions: `deckBand(24, N)` is green at N=6 (needs >=23.7 -> 24), warn
+ * at N=10 (needs >=37.4) — kept deliberately in "warn" at the default N=10
+ * preset so the deck-band warning copy is exercised by scripts that reach
+ * team-setup, not just a unit fixture (same rationale the original demo
+ * deck documented).
  */
-import type { Question } from '../../contracts';
+import type { Question } from '../../../src/contracts';
 import { makePlaceholderAudioDataUrl, makePlaceholderImageDataUrl } from './placeholder-media';
 
 interface TextFixture {
@@ -34,14 +44,10 @@ const TEXT_FIXTURES: TextFixture[] = [
   { text: 'ما هي عملة المملكة العربية السعودية؟', options: ['الدرهم', 'الدينار', 'الريال', 'الجنيه'], correctIndex: 2 },
   { text: 'كم عدد قارات العالم؟', options: ['خمسة', 'ستة', 'سبعة', 'ثمانية'], correctIndex: 2 },
   { text: 'ما اسم أعلى جبل في العالم؟', options: ['كليمنجارو', 'إفرست', 'إلبروس', 'فوجي'], correctIndex: 1 },
-  { text: 'كم يبلغ عدد أيام السنة الميلادية الكبيسة؟', options: ['ثلاثمئة وأربعة وستون', 'ثلاثمئة وخمسة وستون', 'ثلاثمئة وستة وستون', 'ثلاثمئة وسبعة وستون'], correctIndex: 2 },
   { text: 'ما هي أكبر دولة من حيث المساحة؟', options: ['الصين', 'كندا', 'روسيا', 'الولايات المتحدة'], correctIndex: 2 },
   { text: 'ما اسم غاز التنفس الذي يحتاجه الإنسان؟', options: ['ثاني أكسيد الكربون', 'النيتروجين', 'الأكسجين', 'الهيدروجين'], correctIndex: 2 },
   { text: 'كم عدد أضلاع المربع؟', options: ['ثلاثة', 'أربعة', 'خمسة', 'ستة'], correctIndex: 1 },
-  { text: 'ما اسم أول رائد فضاء وصل إلى القمر؟', options: ['يوري غاغارين', 'نيل أرمسترونغ', 'باز ألدرن', 'جون غلين'], correctIndex: 1 },
   { text: 'ما اللغة الرسمية في مصر؟', options: ['الإنجليزية', 'الفرنسية', 'العربية', 'التركية'], correctIndex: 2 },
-  { text: 'كم عدد فصول السنة؟', options: ['اثنان', 'ثلاثة', 'أربعة', 'خمسة'], correctIndex: 2 },
-  { text: 'ما هو الكوكب المعروف بالكوكب الأحمر؟', options: ['المشتري', 'زحل', 'المريخ', 'أورانوس'], correctIndex: 2 },
 ];
 
 interface ImageFixture {
@@ -56,7 +62,6 @@ const IMAGE_FIXTURES: ImageFixture[] = [
   { label: 'أسد', aspect: 'landscape', text: 'ما اسم الحيوان في الصورة؟', options: ['نمر', 'أسد', 'ذئب', 'دب'], correctIndex: 1 },
   { label: 'برج', aspect: 'portrait', text: 'ما نوع المبنى الظاهر في الصورة؟', options: ['برج', 'جسر', 'كوخ', 'سد'], correctIndex: 0 },
   { label: 'تفاحة', aspect: 'square', text: 'ما اسم الفاكهة في الصورة؟', options: ['موزة', 'تفاحة', 'برتقالة', 'عنبة'], correctIndex: 1 },
-  { label: 'جمل', aspect: 'landscape', text: 'ما اسم الحيوان المعروف بسفينة الصحراء؟', options: ['حصان', 'جمل', 'ثور', 'غزال'], correctIndex: 1 },
 ];
 
 interface AudioFixture {
@@ -69,16 +74,14 @@ interface AudioFixture {
 
 const AUDIO_FIXTURES: AudioFixture[] = [
   { freqHz: 440, seconds: 3, text: 'استمعوا للمقطع — كم نغمة سمعتم؟', options: ['نغمة واحدة', 'نغمتان', 'ثلاث نغمات', 'أربع نغمات'], correctIndex: 0 },
-  { freqHz: 262, seconds: 4, text: 'استمعوا للمقطع ثم أجيبوا', options: ['طويل', 'قصير جدًا', 'متوسط الطول', 'صامت'], correctIndex: 2 },
-  { freqHz: 523, seconds: 2, text: 'استمعوا للمقطع القصير', options: ['نغمة حادة', 'صمت تام', 'ضجيج', 'صوت طبل'], correctIndex: 0 },
 ];
 
-export function buildDemoDeck(): Question[] {
+export function buildFixtureDeck(): Question[] {
   const questions: Question[] = [];
 
   TEXT_FIXTURES.forEach((f, i) => {
     questions.push({
-      id: `demo-text-${i + 1}`,
+      id: `fixture-text-${i + 1}`,
       text: f.text,
       options: f.options,
       correctIndex: f.correctIndex,
@@ -88,40 +91,39 @@ export function buildDemoDeck(): Question[] {
 
   IMAGE_FIXTURES.forEach((f, i) => {
     questions.push({
-      id: `demo-image-${i + 1}`,
+      id: `fixture-image-${i + 1}`,
       text: f.text,
       options: f.options,
       correctIndex: f.correctIndex,
-      // sha256/ext are unused placeholders here — this worktree has no
-      // content-addressed media store yet (WL-C/WL-D). The actual pixels
-      // are resolved at render time via `resolveDemoMediaUrl` below.
-      media: { kind: 'image', sha256: `demo-image-${i + 1}`, ext: 'png' },
+      // sha256/ext are unused placeholders — this fixture has no real
+      // content-addressed media store behind it. Pixels are resolved at
+      // render time via `resolveFixtureMediaUrl` below.
+      media: { kind: 'image', sha256: `fixture-image-${i + 1}`, ext: 'png' },
     });
   });
 
   AUDIO_FIXTURES.forEach((f, i) => {
     questions.push({
-      id: `demo-audio-${i + 1}`,
+      id: `fixture-audio-${i + 1}`,
       text: f.text,
       options: f.options,
       correctIndex: f.correctIndex,
-      media: { kind: 'audio', sha256: `demo-audio-${i + 1}`, ext: 'wav' },
+      media: { kind: 'audio', sha256: `fixture-audio-${i + 1}`, ext: 'wav' },
     });
   });
 
   return questions;
 }
 
-/** Resolves a demo question's media id to a renderable URL, synthesizing it
- *  lazily (once) and caching — see placeholder-media.ts's header for why
- *  this exists instead of a real content-addressed lookup. */
+/** Resolves a fixture question's media id to a renderable URL, synthesizing
+ *  it lazily (once) and caching — see placeholder-media.ts's header. */
 const urlCache = new Map<string, string>();
 
-export function resolveDemoMediaUrl(questionId: string): string {
+export function resolveFixtureMediaUrlById(questionId: string): string {
   const cached = urlCache.get(questionId);
   if (cached) return cached;
 
-  const imageIdx = IMAGE_FIXTURES.findIndex((_, i) => `demo-image-${i + 1}` === questionId);
+  const imageIdx = IMAGE_FIXTURES.findIndex((_, i) => `fixture-image-${i + 1}` === questionId);
   if (imageIdx !== -1) {
     const f = IMAGE_FIXTURES[imageIdx]!;
     const url = makePlaceholderImageDataUrl({ label: f.label, aspect: f.aspect, seed: imageIdx + 1 });
@@ -129,7 +131,7 @@ export function resolveDemoMediaUrl(questionId: string): string {
     return url;
   }
 
-  const audioIdx = AUDIO_FIXTURES.findIndex((_, i) => `demo-audio-${i + 1}` === questionId);
+  const audioIdx = AUDIO_FIXTURES.findIndex((_, i) => `fixture-audio-${i + 1}` === questionId);
   if (audioIdx !== -1) {
     const f = AUDIO_FIXTURES[audioIdx]!;
     const url = makePlaceholderAudioDataUrl({ freqHz: f.freqHz, seconds: f.seconds });
@@ -137,5 +139,16 @@ export function resolveDemoMediaUrl(questionId: string): string {
     return url;
   }
 
-  throw new Error(`resolveDemoMediaUrl: unknown media question id ${questionId}`);
+  throw new Error(`resolveFixtureMediaUrlById: unknown media question id ${questionId}`);
+}
+
+/** Matches the real `resolveMediaUrl` seam's shape (`(question) => string |
+ *  null`) directly, for scripts calling `renderQuestionScreen` themselves. */
+export function resolveFixtureMediaUrl(question: Question): string | null {
+  if (question.media.kind === 'none') return null;
+  try {
+    return resolveFixtureMediaUrlById(question.id);
+  } catch {
+    return null;
+  }
 }
