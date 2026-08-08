@@ -7,9 +7,12 @@
  *
  * ---- Why N=10 is the reference track length --------------------------
  *
- * خطة.md Appendix أ gives two literal example messages:
+ * خطة.md Appendix أ gives two literal example messages (the second shown
+ * here after D-09.26's binding vocabulary fix — `addendum-deck-floor-
+ * 2026-08-08.md` — which replaces «خطوات» with «محطات» project-wide; the
+ * derivation arithmetic below is unaffected, only the trailing word is):
  *   «أسئلتك ٢٦ — تكفي غالباً، وإذا كثرت الأخطاء ممكن تخلص الأسئلة قبل ما يوصل أحد»
- *   «أسئلتك ١٨ — تكفي لمسار ٦ خطوات»
+ *   «أسئلتك ١٨ — تكفي لمسار ٦ محطات»
  * Both reproduce **exactly** under `deckBand(D, 10)` and nothing else:
  *   deckBand(26, 10): greenThreshold = 3.34*10+4 = 37.4, refuseThreshold = 2*10+2 = 22.
  *     26 < 37.4 and 26 >= 22  ⇒ 'warn'.  ✓ matches the first example.

@@ -51,12 +51,23 @@ export function renderQuestionForm(options: QuestionFormOptions): HTMLFormElemen
     row.className = 'option-row';
     row.dataset.optionIndex = String(optionIndex);
 
+    // Addendum-small-screens §4.4 — 48x48 minimum touch target. The native
+    // radio's own visual box stays small (24x24, editor.css), but a real
+    // `<label>` wrapper gives the whole padded label area a native,
+    // browser-handled click/tap target without a second event listener
+    // that would risk double-toggling (a `<label><input></label>` pair
+    // toggles the input on a click ANYWHERE in the label, including its
+    // padding, by browser default behaviour — never re-implemented here).
+    const radioToggle = document.createElement('label');
+    radioToggle.className = 'option-correct-toggle';
+
     const radio = document.createElement('input');
     radio.type = 'radio';
     radio.name = radioGroupName;
     radio.value = String(optionIndex);
     radio.className = 'option-correct-radio';
     radio.checked = options.initial?.correctIndex === optionIndex;
+    radioToggle.append(radio);
 
     const input = document.createElement('input');
     input.type = 'text';
@@ -84,7 +95,7 @@ export function renderQuestionForm(options: QuestionFormOptions): HTMLFormElemen
       refresh();
     });
 
-    row.append(radio, input, check, label);
+    row.append(radioToggle, input, check, label);
     form.append(row);
     optionInputs.push(input);
     radios.push(radio);
@@ -206,11 +217,19 @@ export function renderQuestionForm(options: QuestionFormOptions): HTMLFormElemen
   mediaSection.append(attachButton, fileInput, errorEl, previewEl);
   form.append(mediaSection);
 
+  // Addendum-small-screens §5 fix #1 — the form's own primary action
+  // ("تم") is pinned to the bottom of the viewport while the fields above
+  // it (text, four options, media attach) are being filled, so completing
+  // a question never requires scrolling past a long question list AND a
+  // tall form to find the submit button.
+  const actions = document.createElement('div');
+  actions.className = 'question-form-actions';
+
   const submit = document.createElement('button');
   submit.type = 'submit';
   submit.className = 'question-submit';
   submit.textContent = AR_COPY.done;
-  form.append(submit);
+  actions.append(submit);
 
   if (options.onCancel) {
     const cancel = document.createElement('button');
@@ -221,8 +240,9 @@ export function renderQuestionForm(options: QuestionFormOptions): HTMLFormElemen
       clearAttachedImagePreview();
       options.onCancel?.();
     });
-    form.append(cancel);
+    actions.append(cancel);
   }
+  form.append(actions);
 
   form.addEventListener('submit', (event) => {
     event.preventDefault();

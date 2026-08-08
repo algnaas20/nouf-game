@@ -143,16 +143,19 @@ export function renderQuestionList(store: DraftStore): HTMLElement {
       deleteButton.textContent = AR_COPY.deleteButton;
       deleteButton.addEventListener('click', () => store.deleteQuestion(question.id));
 
-      card.append(
-        numberLabel,
-        textPreview,
-        mediaPreview,
-        badge,
-        previewButton,
-        upButton,
-        downButton,
-        deleteButton,
-      );
+      // Addendum-small-screens §4.4 — two wrapper rows so the flex-wrap
+      // layout in editor.css can keep every button at >=48x48 CSS px with
+      // >=12px gaps at phone width without the card's text content
+      // fighting the buttons for the same wrapped line.
+      const main = document.createElement('div');
+      main.className = 'question-card-main';
+      main.append(numberLabel, textPreview, mediaPreview, badge);
+
+      const actions = document.createElement('div');
+      actions.className = 'question-card-actions';
+      actions.append(previewButton, upButton, downButton, deleteButton);
+
+      card.append(main, actions);
       container.append(card);
     });
   }

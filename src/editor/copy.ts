@@ -110,8 +110,16 @@ export function deckWarnMessage(deckSize: number): string {
   return `أسئلتك ${formatNumber(deckSize)} — تكفي غالباً، وإذا كثرت الأخطاء ممكن تخلص الأسئلة قبل ما يوصل أحد`;
 }
 
+/**
+ * D-09.26 (`addendum-deck-floor-2026-08-08.md`, binding) — track length is
+ * «محطات», never «خطوات», overriding خطة.md's own literal Appendix-أ string
+ * («تكفي لمسار ٦ خطوات») by name: under the branching maze a «خطوة» is a
+ * move, and a move can be wasted on a dead end, so «خطوات» is now literally
+ * false for most teams. «محطة» is the junction the token actually stands
+ * on — what this count is really counting.
+ */
 export function deckRefuseMessage(deckSize: number, fallbackTrackLength: number): string {
-  return `أسئلتك ${formatNumber(deckSize)} — تكفي لمسار ${formatNumber(fallbackTrackLength)} خطوات`;
+  return `أسئلتك ${formatNumber(deckSize)} — تكفي لمسار ${formatNumber(fallbackTrackLength)} محطات`;
 }
 
 /** PH-C3: no literal "all clear" deck message exists in Appendix أ (only

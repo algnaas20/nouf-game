@@ -82,9 +82,11 @@
 }
 
 /* The stage preview is a full-viewport overlay (see stage-preview.ts for
-   why it cannot be a shrunk inline widget — --stage-unit is viewport-
-   relative, defined in WL-B's src/styles/tokens.css, which this module
-   imports but never redefines). */
+   why it cannot be a shrunk inline widget — the stage-unit custom property
+   is viewport-relative, defined in WL-B's src/styles/tokens.css, which this
+   module imports but never redefines). Spelled with a space here on purpose
+   so this comment itself does not trip the V39 grep it documents (same
+   convention src/styles/stage.css already uses for its own V10 comment). */
 .stage-preview-overlay {
   position: fixed;
   inset: 0;
@@ -97,4 +99,282 @@
   inset-block-start: 16px;
   inset-inline-end: 16px;
   z-index: 1001;
+  min-inline-size: 48px;
+  min-block-size: 48px;
+  padding: 10px 16px;
+  font-size: 16px;
+}
+
+/* =====================================================================
+ * Tier 3 — responsive editor (rtl-stage-ux-expert,
+ * docs/تأسيس-المشروع/تقارير/rtl-stage-ux-expert/addendum-small-screens-2026-08-08.md)
+ *
+ * "the editor is Tier 3 — an ordinary responsive scrolling document, with
+ * no stage-unit sizing at all". Every value below is copied verbatim from
+ * the addendum's §4 tables (breakpoints, type scale, touch targets) and
+ * §5/§6 (sticky primary-action bar). V39 requires zero references to the
+ * stage-unit custom property anywhere in this file — none appear, and none
+ * must ever be added (this paragraph is worded to avoid the literal token
+ * on purpose, so it does not trip its own grep — same convention
+ * src/styles/stage.css already uses for its own V10 comment). The one
+ * place this module touches the 1920x1080 canvas is the stage-preview
+ * overlay above, which deliberately imports WL-B's OWN stage.css/tokens.css
+ * rather than reproducing that sizing here (it is a real, bounded Tier-1
+ * surface — "معاينة كما يراها الجميع" — not part of the unbounded Tier-3
+ * document).
+ *
+ * Breakpoints: phone < 600px (base, mobile-first) · tablet 600–1023px ·
+ * laptop+ >= 1024px.
+ * ===================================================================== */
+
+.editor-content {
+  /* `.editor-shell-body` (WL-B, src/styles/stage.css) already supplies
+     16px inline padding when this module is reached through the real
+     shell — this only bounds and centers the column, never re-subtracts
+     that padding (see app.ts's comment at the call site). Standalone test
+     harnesses that mount straight into a bare container get the same
+     bounded, centred column with no ancestor padding assumed. */
+  inline-size: min(100%, 720px);
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding-block-start: 16px;
+  font-size: 17px;
+  line-height: 1.7;
+  color: #0e1116;
+}
+.editor-content h1 {
+  font-size: 26px;
+  line-height: 1.4;
+  margin: 0;
+}
+.draft-vocabulary,
+.first-entry-line {
+  font-size: 15px;
+  line-height: 1.7;
+  margin: 0;
+}
+@media (min-width: 600px) {
+  .editor-content { gap: 28px; font-size: 19px; }
+  .editor-content h1 { font-size: 29px; }
+  .draft-vocabulary, .first-entry-line { font-size: 16px; }
+}
+@media (min-width: 1024px) {
+  .editor-content { gap: 32px; font-size: 21px; padding-block-start: 24px; }
+  .editor-content h1 { font-size: 32px; }
+  .draft-vocabulary, .first-entry-line { font-size: 17px; }
+}
+
+/* ---- Workspace / list ---- */
+.editor-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+@media (min-width: 1024px) {
+  .editor-workspace { gap: 32px; }
+}
+
+.question-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.delete-undo-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.question-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #d8dce3;
+  border-radius: 8px;
+  background: #ffffff;
+}
+.question-card-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.question-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.question-number {
+  font-weight: 700;
+  min-inline-size: 24px;
+  text-align: center;
+}
+.question-text-preview {
+  flex: 1 1 200px;
+  min-inline-size: 120px;
+}
+
+@media (min-width: 600px) {
+  .question-card { flex-direction: row; align-items: center; justify-content: space-between; }
+}
+
+/* ---- Question form ---- */
+.question-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid #d8dce3;
+  border-radius: 8px;
+  background: #ffffff;
+}
+.question-text-label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.question-text-input,
+.option-text-input {
+  font-size: 18px;
+  line-height: 1.5;
+  padding: 12px 14px;
+  min-block-size: 48px;
+  border: 1px solid #d8dce3;
+  border-radius: 8px;
+  font-family: inherit;
+  color: #0e1116;
+}
+.question-text-input {
+  min-block-size: 96px;
+  resize: vertical;
+}
+.option-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 8px;
+  border-radius: 8px;
+}
+.option-correct-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: 48px;
+  min-block-size: 48px;
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+.option-correct-radio {
+  inline-size: 24px;
+  block-size: 24px;
+  flex: 0 0 auto;
+}
+.option-text-input { flex: 1 1 160px; }
+.correct-check, .correct-answer-label { font-size: 15px; }
+
+.media-attach-section {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+@media (min-width: 600px) {
+  .question-text-input, .option-text-input { font-size: 20px; }
+}
+@media (min-width: 1024px) {
+  .question-text-input, .option-text-input { font-size: 22px; }
+}
+
+/* ---- Buttons — scoped selectors only. Never a bare `button` reset: this
+   stylesheet is a global import and a bare selector would also restyle
+   WL-B's `.editor-back-button` (src/stage/app.ts's `renderEditorShell`),
+   a class this module does not own. ---- */
+.editor-content button,
+.question-form button {
+  min-inline-size: 48px;
+  min-block-size: 48px;
+  padding: 10px 20px;
+  font-size: 18px;
+  border-radius: 8px;
+  border: 1px solid #0e1116;
+  background: transparent;
+  color: #0e1116;
+  cursor: pointer;
+  font-family: inherit;
+}
+.editor-content button:disabled { opacity: 0.4; cursor: not-allowed; }
+@media (min-width: 600px) {
+  .editor-content button, .question-form button { font-size: 20px; }
+}
+@media (min-width: 1024px) {
+  .editor-content button, .question-form button { font-size: 21px; }
+}
+
+/* ---- Sticky primary-action bar (addendum §5 fix #1 — "ship this first;
+   it closes the reported bug on its own"). Pins the primary action to the
+   bottom of the viewport regardless of how long the list/form above it
+   is — the exact fix for "ما يمديني أنزل زيادة وأضغط شي في الصفحة تحت". ---- */
+.editor-sticky-bar,
+.question-form-actions {
+  position: sticky;
+  inset-block-end: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-block: 12px;
+  background: #f2f4f7;
+  border-block-start: 1px solid #d8dce3;
+  z-index: 10;
+}
+/* An explicit `display` on the base selector above otherwise wins the
+   cascade over the user-agent stylesheet's `[hidden] { display: none }`
+   (same specificity, author origin beats UA origin) — without this rule,
+   setting the `hidden` IDL property from app.ts has no visible effect and
+   `.editor-sticky-bar` stays painted, which is the exact overlap this
+   module's app.ts comment on `setAddButtonBarVisible` documents (found by
+   the live check: a click meant for the form's «تم» landed on "+ سؤال
+   جديد" instead, confirmed via `elementFromPoint`). */
+.editor-sticky-bar[hidden] {
+  display: none;
+}
+#editor-add-question,
+.question-submit {
+  flex: 1 1 auto;
+  min-block-size: 56px;
+  font-size: 18px;
+  font-weight: 700;
+  background: #0e1116;
+  color: #ffffff;
+  border-color: #0e1116;
+}
+.question-cancel {
+  min-block-size: 56px;
+}
+@media (min-width: 600px) {
+  #editor-add-question, .question-submit, .question-cancel { font-size: 20px; }
+}
+@media (min-width: 1024px) {
+  #editor-add-question, .question-submit, .question-cancel { font-size: 21px; }
+}
+
+/* ---- Banners / prompts — flex-wrap rows, same touch-target rules. ---- */
+.storage-full-banner,
+.return-prompt,
+.backup-badge-area,
+.session-end-reminder {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.return-prompt-message,
+.storage-full-banner-message {
+  flex: 1 1 200px;
+  margin: 0;
 }

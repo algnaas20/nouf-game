@@ -24,11 +24,15 @@ describe('computeReadiness — imports WL-A deck-bands.ts, never reimplements it
     );
   });
 
-  it('D=18 → refuse, matching خطة.md Appendix أ literally: «أسئلتك 18 — تكفي لمسار 6 خطوات»', () => {
+  // D-09.26 (addendum-deck-floor-2026-08-08.md, binding) overrides خطة.md's
+  // own literal Appendix-أ string by name: track length is «محطات», never
+  // «خطوات» — a «خطوة» is now a move under the branching maze, and a move
+  // can be wasted on a dead end, so «خطوات» is literally false.
+  it('D=18 → refuse, matching the D-09.26 vocabulary fix: «أسئلتك 18 — تكفي لمسار 6 محطات»', () => {
     const result = computeReadiness(18);
     console.log('readiness(18):', result);
     expect(result.band).toBe('refuse');
-    expect(result.message).toBe('أسئلتك 18 — تكفي لمسار 6 خطوات');
+    expect(result.message).toBe('أسئلتك 18 — تكفي لمسار 6 محطات');
   });
 
   it('a comfortably large deck (D=60) is green', () => {

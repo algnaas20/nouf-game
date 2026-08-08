@@ -1,0 +1,251 @@
+{
+  "V39_no_stage_unit_leakage": {
+    "file": "src/editor/editor.css",
+    "matchCount": 0,
+    "pass": true
+  },
+  "V38_primary_action_reachability": {
+    "pass": true,
+    "byViewport": {
+      "1366x768": {
+        "addButtonReachable": true,
+        "addButtonError": null,
+        "submitReachable": true,
+        "submitError": null,
+        "addButtonRectAtClick": {
+          "x": 323,
+          "y": 663.140625,
+          "width": 720,
+          "height": 61
+        },
+        "addButtonScrollTicks": 0,
+        "submitRectAtClick": {
+          "x": 436.40625,
+          "y": 645.828125,
+          "width": 589.59375,
+          "height": 61
+        },
+        "submitScrollTicks": 0,
+        "questionCountAfterSubmit": 16,
+        "realEffectConfirmed": true
+      },
+      "1280x800": {
+        "addButtonReachable": true,
+        "addButtonError": null,
+        "submitReachable": true,
+        "submitError": null,
+        "addButtonRectAtClick": {
+          "x": 280,
+          "y": 695.140625,
+          "width": 720,
+          "height": 61
+        },
+        "addButtonScrollTicks": 0,
+        "submitRectAtClick": {
+          "x": 393.40625,
+          "y": 677.828125,
+          "width": 589.59375,
+          "height": 61
+        },
+        "submitScrollTicks": 0,
+        "questionCountAfterSubmit": 16,
+        "realEffectConfirmed": true
+      },
+      "390x844": {
+        "addButtonReachable": true,
+        "addButtonError": null,
+        "submitReachable": true,
+        "submitError": null,
+        "addButtonRectAtClick": {
+          "x": 16,
+          "y": 744.140625,
+          "width": 358,
+          "height": 56
+        },
+        "addButtonScrollTicks": 0,
+        "submitRectAtClick": {
+          "x": 123.34375,
+          "y": 765.53125,
+          "width": 233.65625,
+          "height": 55
+        },
+        "submitScrollTicks": 0,
+        "questionCountAfterSubmit": 16,
+        "realEffectConfirmed": true
+      },
+      "360x640": {
+        "addButtonReachable": true,
+        "addButtonError": null,
+        "submitReachable": true,
+        "submitError": null,
+        "addButtonRectAtClick": {
+          "x": 16,
+          "y": 540.140625,
+          "width": 328,
+          "height": 56
+        },
+        "addButtonScrollTicks": 0,
+        "submitRectAtClick": {
+          "x": 123.34375,
+          "y": 573,
+          "width": 203.65625,
+          "height": 55
+        },
+        "submitScrollTicks": 0,
+        "questionCountAfterSubmit": 16,
+        "realEffectConfirmed": true
+      }
+    }
+  },
+  "V40_touch_targets": {
+    "pass": true,
+    "buttonCount": 17,
+    "radioToggleCount": 4,
+    "undersizedTargets": [],
+    "inputCount": 10,
+    "inputs": [
+      {
+        "tag": "TEXTAREA",
+        "type": "textarea",
+        "cls": "question-text-input",
+        "fontSizePx": 18
+      },
+      {
+        "tag": "INPUT",
+        "type": "radio",
+        "cls": "option-correct-radio",
+        "fontSizePx": 13.3333
+      },
+      {
+        "tag": "INPUT",
+        "type": "text",
+        "cls": "option-text-input",
+        "fontSizePx": 18
+      },
+      {
+        "tag": "INPUT",
+        "type": "radio",
+        "cls": "option-correct-radio",
+        "fontSizePx": 13.3333
+      },
+      {
+        "tag": "INPUT",
+        "type": "text",
+        "cls": "option-text-input",
+        "fontSizePx": 18
+      },
+      {
+        "tag": "INPUT",
+        "type": "radio",
+        "cls": "option-correct-radio",
+        "fontSizePx": 13.3333
+      },
+      {
+        "tag": "INPUT",
+        "type": "text",
+        "cls": "option-text-input",
+        "fontSizePx": 18
+      },
+      {
+        "tag": "INPUT",
+        "type": "radio",
+        "cls": "option-correct-radio",
+        "fontSizePx": 13.3333
+      },
+      {
+        "tag": "INPUT",
+        "type": "text",
+        "cls": "option-text-input",
+        "fontSizePx": 18
+      },
+      {
+        "tag": "INPUT",
+        "type": "file",
+        "cls": "media-file-input",
+        "fontSizePx": 13.3333
+      }
+    ],
+    "undersizedInputs": []
+  },
+  "V41_input_font_size": {
+    "pass": true,
+    "inputs": [
+      {
+        "tag": "TEXTAREA",
+        "type": "textarea",
+        "cls": "question-text-input",
+        "fontSizePx": 18
+      },
+      {
+        "tag": "INPUT",
+        "type": "radio",
+        "cls": "option-correct-radio",
+        "fontSizePx": 13.3333
+      },
+      {
+        "tag": "INPUT",
+        "type": "text",
+        "cls": "option-text-input",
+        "fontSizePx": 18
+      },
+      {
+        "tag": "INPUT",
+        "type": "radio",
+        "cls": "option-correct-radio",
+        "fontSizePx": 13.3333
+      },
+      {
+        "tag": "INPUT",
+        "type": "text",
+        "cls": "option-text-input",
+        "fontSizePx": 18
+      },
+      {
+        "tag": "INPUT",
+        "type": "radio",
+        "cls": "option-correct-radio",
+        "fontSizePx": 13.3333
+      },
+      {
+        "tag": "INPUT",
+        "type": "text",
+        "cls": "option-text-input",
+        "fontSizePx": 18
+      },
+      {
+        "tag": "INPUT",
+        "type": "radio",
+        "cls": "option-correct-radio",
+        "fontSizePx": 13.3333
+      },
+      {
+        "tag": "INPUT",
+        "type": "text",
+        "cls": "option-text-input",
+        "fontSizePx": 18
+      },
+      {
+        "tag": "INPUT",
+        "type": "file",
+        "cls": "media-file-input",
+        "fontSizePx": 13.3333
+      }
+    ]
+  },
+  "V42_portrait_full_flow": {
+    "pass": true,
+    "noHorizontalScrollBeforeForm": true,
+    "noHorizontalScrollWithForm": true,
+    "submitClicked": true
+  },
+  "V43_no_rotate_gate_on_editor": {
+    "pass": true,
+    "landscapeThin": {
+      "rotateMessagePresent": false
+    },
+    "portraitThin": {
+      "rotateMessagePresent": false
+    }
+  },
+  "OVERALL_PASS": true
+}

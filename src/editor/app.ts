@@ -52,14 +52,27 @@ export async function mountEditor(
   container.dir = 'rtl';
   container.lang = 'ar';
 
+  // Addendum-small-screens-2026-08-08 (rtl-stage-ux-expert), Tier 3 —
+  // "an ordinary responsive scrolling document, with no --stage-unit at
+  // all". `content` is a wrapper fully owned here (never `container`
+  // itself, which is WL-B's `.editor-shell-body` when reached via the real
+  // shell) so the §4 column/breakpoint rules in editor.css can target a
+  // class only this module defines. `container`'s ancestor already
+  // supplies inline padding when present (`src/styles/stage.css`
+  // `.editor-shell-body`) — `.editor-content` only bounds the column width
+  // (`min(100%, 720px)`) and centers it, never re-subtracts that padding.
+  const content = document.createElement('div');
+  content.className = 'editor-content';
+  container.append(content);
+
   const title = document.createElement('h1');
   title.textContent = AR_COPY.questionsTitle;
-  container.append(title);
+  content.append(title);
 
   const vocabularyLine = document.createElement('p');
   vocabularyLine.className = 'draft-vocabulary';
   vocabularyLine.textContent = AR_COPY.draftVocabulary;
-  container.append(vocabularyLine);
+  content.append(vocabularyLine);
 
   // PH-C3 — the single place `options.onRequestBackup`'s Promise-returning
   // boundary is crossed into `store.recordBackup`. Every UI trigger below
@@ -74,16 +87,16 @@ export async function mountEditor(
   }
 
   const storageFullBanner = renderStorageFullBanner({ onSaveBackup: triggerBackup });
-  container.append(storageFullBanner);
+  content.append(storageFullBanner);
 
   const backupBadge = renderBackupBadge(store, { onRequestBackup: triggerBackup });
-  container.append(backupBadge);
+  content.append(backupBadge);
 
   const readinessMeter = renderReadinessMeter(store);
-  container.append(readinessMeter);
+  content.append(readinessMeter);
 
   const mediaBatchWarning = renderMediaBatchWarning(store);
-  container.append(mediaBatchWarning);
+  content.append(mediaBatchWarning);
 
   // PH-C3 — real `beforeunload` signal, defense in depth alongside the
   // always-visible T1 banner rendered by renderBackupBadge (see that
@@ -133,7 +146,7 @@ export async function mountEditor(
         });
       },
     });
-    container.append(returnPrompt);
+    content.append(returnPrompt);
   } else {
     revealWorkspace(true);
   }
@@ -145,17 +158,41 @@ export async function mountEditor(
   formContainer.className = 'question-form-container';
   workspace.append(formContainer);
 
+  // Addendum-small-screens §5 fix #1 — "ship the sticky action bar first;
+  // it closes the reported bug on its own". The primary action ("+ سؤال
+  // جديد") is pinned to the bottom of the viewport, reachable regardless of
+  // how long the question list above it has grown (the exact failure the
+  // user hit with 12–14 authored questions).
+  const addButtonBar = document.createElement('div');
+  addButtonBar.className = 'editor-sticky-bar';
   const addButton = document.createElement('button');
   addButton.type = 'button';
   addButton.id = 'editor-add-question';
   addButton.textContent = AR_COPY.addQuestion;
+  // Red-team finding (live check, tests/editor/live-tier3-reachability.manual.cjs):
+  // with the form open, `.editor-sticky-bar` and the form's own
+  // `.question-form-actions` both pin to `inset-block-end: 0` at the SAME
+  // time — same screen position, same z-index tier — and being later in
+  // DOM order, `addButtonBar` painted on top and silently absorbed clicks
+  // meant for the form's «تم» button (confirmed via
+  // `document.elementFromPoint` at the submit button's own coordinates
+  // returning "+ سؤال جديد" instead). Hiding this bar exactly while the
+  // form occupies the same sticky footer slot removes the overlap; it
+  // reappears the moment the form closes (submit or cancel), which is
+  // still every other moment the add action is the right sticky control.
+  function setAddButtonBarVisible(visible: boolean): void {
+    addButtonBar.hidden = !visible;
+  }
+
   addButton.addEventListener('click', () => {
     formContainer.innerHTML = '';
+    setAddButtonBarVisible(false);
     const form = renderQuestionForm({
       onSubmit: (input) => {
         void store.addQuestion(input).then((result) => {
           if (result.ok) {
             formContainer.innerHTML = '';
+            setAddButtonBarVisible(true);
           } else {
             setStorageFullBannerVisible(storageFullBanner, true);
           }
@@ -163,13 +200,23 @@ export async function mountEditor(
       },
       onCancel: () => {
         formContainer.innerHTML = '';
+        setAddButtonBarVisible(true);
       },
     });
     formContainer.append(form);
+    // Reachability — with a long question list above `formContainer`, the
+    // browser keeps the current scrollTop when this new content is
+    // inserted, which can leave the just-opened form's own fields (or the
+    // click target the author is looking for) out of view. Scrolling the
+    // freshly-opened form to the top of the viewport means the author
+    // always lands on the first field, not wherever the list happened to
+    // leave the scroll position.
+    form.scrollIntoView({ block: 'start' });
   });
-  workspace.append(addButton);
+  addButtonBar.append(addButton);
+  workspace.append(addButtonBar);
 
-  container.append(workspace);
+  content.append(workspace);
 
   store.subscribe((state) => {
     setStorageFullBannerVisible(storageFullBanner, state.storageFullMessage !== null);
