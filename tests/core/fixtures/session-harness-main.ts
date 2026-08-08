@@ -22,6 +22,7 @@ import { fold } from '../../../src/core/fold';
 import { applyEvent } from '../../../src/core/reducer';
 import { legalEvents, type GameContext } from '../../../src/core/legal';
 import { saveSession, checkResume, clearSession } from '../../../src/core/session-store';
+import { MAZE_GEN_VERSION } from '../../../src/core/rules/maze';
 
 declare global {
   interface Window {
@@ -67,6 +68,7 @@ function playDeterministicPartialGame(firstTeam: TeamId): GameEvent[] {
       teamNames: ['فريق أ', 'فريق ب'],
       firstTeam,
       deckHash: DECK_HASH,
+      mazeGenVersion: MAZE_GEN_VERSION,
     },
   ];
   let state = fold(events);

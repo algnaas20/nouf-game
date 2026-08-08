@@ -21,6 +21,7 @@
 
 import type { GameEvent, GameState } from '../contracts';
 import { fold } from './fold';
+import { MAZE_GEN_VERSION } from './rules/maze';
 
 const STORAGE_KEY = 'nouf-game:session:v1';
 
@@ -88,6 +89,7 @@ export function clearSession(storage: SessionStorageLike | null = defaultStorage
 export type ResumeCheck =
   | { kind: 'none' }
   | { kind: 'refused'; reason: 'deck-mismatch'; storedDeckHash: string; currentDeckHash: string }
+  | { kind: 'refused'; reason: 'maze-version-mismatch'; storedVersion: number; currentVersion: number }
   | { kind: 'refused'; reason: 'corrupt' }
   | { kind: 'available'; events: GameEvent[]; state: GameState };
 
@@ -104,6 +106,13 @@ export type ResumeCheck =
  * that log against a different deck would resume into state that is
  * quietly wrong (wrong question text, wrong correct answer, or a missing
  * question entirely) rather than loudly wrong.
+ *
+ * M-RESUME-1 (game-systems-expert 2026-08-08 §10.5): the same refusal,
+ * applied to the maze generator's own version. A stored session whose
+ * `mazeGenVersion` differs from the generator this build ships is refused —
+ * never silently replayed against a different generator, which could
+ * "resume" into junctions/dead-ends that were never the ones actually shown
+ * before the interruption.
  */
 export function checkResume(
   currentDeckHash: string,
@@ -122,6 +131,14 @@ export function checkResume(
       reason: 'deck-mismatch',
       storedDeckHash: first.deckHash,
       currentDeckHash,
+    };
+  }
+  if (first.mazeGenVersion !== MAZE_GEN_VERSION) {
+    return {
+      kind: 'refused',
+      reason: 'maze-version-mismatch',
+      storedVersion: first.mazeGenVersion,
+      currentVersion: MAZE_GEN_VERSION,
     };
   }
 

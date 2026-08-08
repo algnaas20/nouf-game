@@ -11,6 +11,7 @@ import type { GameEvent, GameState, Question, TeamId } from '../../src/contracts
 import { applyEvent, IllegalTransitionError, initialState } from '../../src/core/reducer';
 import { fold, undo } from '../../src/core/fold';
 import { legalEvents, type GameContext } from '../../src/core/legal';
+import { buildMaze, MAZE_GEN_VERSION } from '../../src/core/rules/maze';
 
 const DECK: Question[] = [
   {
@@ -65,6 +66,7 @@ function startGame(
     teamNames: ['فريق أ', 'فريق ب'],
     firstTeam,
     deckHash: computeDeckHash(deck),
+    mazeGenVersion: MAZE_GEN_VERSION,
   };
   return [started];
 }
@@ -146,7 +148,7 @@ describe('PH-A1 — minimal core: 100 seeded games, N=2, 3-question deck, random
     expect(finished).toBe(100);
   });
 
-  it('criterion 2+3: I1, I3, I6, I7 hold at every step of every game; counts printed', () => {
+  it('criterion 2+3: I1, I3, I6′, I7 hold at every step of every game; counts printed', () => {
     let i1Count = 0;
     let i3Count = 0;
     let i6Count = 0;
@@ -166,6 +168,13 @@ describe('PH-A1 — minimal core: 100 seeded games, N=2, 3-question deck, random
       // usedQuestionIds cannot hide a repeated question behind a
       // trivially-still-unique empty array.
       const shownQuestionIds: string[] = [];
+      // I6' ground truth: replayed against a FRESH buildMaze(seed, N) call,
+      // never against state.maze/state.wasted themselves (the exact
+      // self-referential shortcut worklog-A1.md warned against for I6).
+      const layout = buildMaze(seed, N);
+      const localJunction: [number, number] = [0, 0];
+      const localWasted: [number, number] = [0, 0];
+      const localClosed: [number[], number[]] = [[], []];
       for (let i = 0; i < events.length; i++) {
         const ev = events[i];
         const state = states[i];
@@ -191,25 +200,42 @@ describe('PH-A1 — minimal core: 100 seeded games, N=2, 3-question deck, random
         i7Count++;
 
         if (ev.type === 'MOVE_APPLIED') {
-          // Ground truth comes from the ANSWER_CHOSEN event that preceded
-          // this MOVE_APPLIED — deliberately NOT from ev.delta, which is
-          // exactly the field a "grant a step on a wrong answer" mutation
-          // corrupts. Reading delta here would make this check blind to
-          // that exact mutation (self-referential guard).
+          // Ground truth for "was this a correct answer" comes from the
+          // ANSWER_CHOSEN event that preceded this MOVE_APPLIED —
+          // deliberately NOT from any reducer-computed field.
           const prev = events[i - 1];
           const wasCorrect = prev !== undefined && prev.type === 'ANSWER_CHOSEN' && prev.correct;
-          if (wasCorrect) correctByTeam[ev.team === 'A' ? 0 : 1]++;
+          const idx = ev.team === 'A' ? 0 : 1;
+          if (wasCorrect) correctByTeam[idx]++;
+
+          // Independent replay of the one-stumble rule itself, against the
+          // freshly-rebuilt layout — not against resolveMove (mutating
+          // resolveMove must NOT make this check blind, per worklog-A5.md).
+          if (ev.exit !== null && localJunction[idx] < N) {
+            const junction = layout.routes[idx]!.junctions[localJunction[idx]]!;
+            if (ev.exit === junction.deadEndExit && localWasted[idx] === 0) {
+              localWasted[idx]++;
+              localClosed[idx] = [...localClosed[idx], ev.exit];
+            } else {
+              localJunction[idx]++;
+              localClosed[idx] = [];
+            }
+          }
         }
 
-        // I6: position[t] === correct[t] at every step.
-        expect(state.positions[0]).toBe(correctByTeam[0]);
-        expect(state.positions[1]).toBe(correctByTeam[1]);
-        i6Count += 2;
+        // I6': position[t] === min(N, correct[t] - wasted[t]).
+        const expectedA = Math.min(N, correctByTeam[0] - localWasted[0]);
+        const expectedB = Math.min(N, correctByTeam[1] - localWasted[1]);
+        expect(state.positions[0]).toBe(expectedA);
+        expect(state.positions[1]).toBe(expectedB);
+        expect(state.wasted[0]).toBe(localWasted[0]);
+        expect(state.wasted[1]).toBe(localWasted[1]);
+        i6Count += 4;
       }
     }
     // eslint-disable-next-line no-console
     console.log(
-      `[A1 criterion 2/3] I1=${i1Count} assertions, I3=${i3Count} assertions, I6=${i6Count} assertions, I7=${i7Count} assertions (all must be > 0)`,
+      `[A1 criterion 2/3] I1=${i1Count} assertions, I3=${i3Count} assertions, I6'=${i6Count} assertions, I7=${i7Count} assertions (all must be > 0)`,
     );
     expect(i1Count).toBeGreaterThan(0);
     expect(i3Count).toBeGreaterThan(0);
@@ -227,7 +253,7 @@ describe('PH-A1 — minimal core: 100 seeded games, N=2, 3-question deck, random
       seq: 0,
       at: FIXED_NOW(),
       team: 'A',
-      delta: 1,
+      exit: 0,
     };
     const beforeS0 = deepClone(s0);
     expect(() => applyEvent(s0, illegalFromSetup)).toThrow(IllegalTransitionError);
@@ -245,6 +271,7 @@ describe('PH-A1 — minimal core: 100 seeded games, N=2, 3-question deck, random
       teamNames: ['فريق أ', 'فريق ب'],
       firstTeam: 'A',
       deckHash: computeDeckHash(DECK),
+      mazeGenVersion: MAZE_GEN_VERSION,
     };
     const s1 = applyEvent(s0, started);
     const shown: GameEvent = {
