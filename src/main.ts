@@ -1,5 +1,6 @@
 import './styles/tokens.css';
 import './styles/stage.css';
+import './styles/console.css';
 import { mountApp } from './stage/app';
 
 // Defensive fallback only — the authoritative `<html lang="ar" dir="rtl">`

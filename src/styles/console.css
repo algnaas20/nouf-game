@@ -1,0 +1,236 @@
+/**
+ * Console stylesheet — WL-B, PH-B6 (reachability fix, 2026-08-08).
+ *
+ * Tier 2 ("console screens" — team-setup today; home/resume/deck-mismatch
+ * follow in a later pass, see worklog-B6.md's disclosed scope cut) per
+ * `rtl-stage-ux-expert`'s `addendum-small-screens-2026-08-08.md`:
+ *
+ *   "A surface may be fixed-canvas only if its content is bounded by
+ *    construction. Any surface whose height depends on user data, form
+ *    fields, lists, or prose must be an ordinary scrolling document."
+ *
+ * NO stage-unit custom property anywhere in this file (V39 in the
+ * addendum's own verification table; enforced here by a grep guard in
+ * tests/stage/verify-b6-reachability.manual.cjs, which this comment itself
+ * must not trip — see `stage.css`'s own header for the same convention) —
+ * this is a NORMAL responsive document on the CSS-px close-viewing scale
+ * (addendum §4), not the 1920x1080 TV canvas `stage.css` owns. Fixed
+ * positioning never appears here either — Tier 2 always scrolls with the
+ * page.
+ */
+
+.console-root {
+  min-block-size: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: 'Cairo', 'SF Arabic', 'Segoe UI', 'Noto Naskh Arabic', 'Noto Sans Arabic', Tahoma, 'Geeza Pro', sans-serif;
+}
+
+.console-back-bar {
+  flex: 0 0 auto;
+  position: sticky;
+  inset-block-start: 0;
+  display: flex;
+  padding: 12px 16px;
+  background: var(--color-bg);
+  border-block-end: 1px solid #2A2F38;
+  z-index: 2;
+}
+
+/* addendum §4.4 — every interactive target in Tier 2/3 is >=48x48 CSS px,
+   overriding stage.css's `.op-button` stage-unit sizing (which resolves to
+   near-zero at small viewports — exactly trap #2 in the addendum's §5). */
+.console-back-button {
+  min-inline-size: 48px;
+  min-block-size: 48px;
+  padding: 10px 20px;
+  font-size: 18px;
+  border-radius: 8px;
+  border: 2px solid var(--color-text);
+  background: transparent;
+  color: var(--color-text);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.console-body {
+  flex: 1 1 auto;
+  inline-size: 100%;
+  padding-block: 24px;
+  padding-inline: 16px;
+}
+
+.console-column {
+  /* addendum §4.2 literal: `min(100% - 32px, 720px)`, centred. */
+  inline-size: min(100% - 32px, 720px);
+  margin-inline: auto;
+}
+
+.console-title {
+  font-size: 26px;
+  line-height: 1.4;
+  font-weight: 700;
+  margin: 0 0 20px;
+}
+
+.console-section {
+  margin-block-end: 24px;
+}
+
+.console-field-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+.console-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.console-field-label {
+  font-size: 15px;
+  line-height: 1.5;
+  opacity: 0.85;
+}
+
+.console-input {
+  /* Never below 16px — iOS Safari zooms on focus below that threshold and
+     wrecks the layout (addendum §4.4). Our floor here is already 18px. */
+  font-size: 18px;
+  line-height: 1.5;
+  min-block-size: 48px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 2px solid #2A2F38;
+  background: #171B22;
+  color: var(--color-text);
+  font-family: inherit;
+  text-align: start;
+}
+
+.console-track-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.console-inline-label {
+  font-size: 17px;
+  opacity: 0.85;
+  flex: 0 0 auto;
+}
+
+.console-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  flex: 1 1 auto;
+}
+
+.console-chip {
+  min-inline-size: 48px;
+  min-block-size: 48px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 8px 16px;
+  border-radius: 10px;
+  border: 2px solid #2A2F38;
+  background: transparent;
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 18px;
+  cursor: pointer;
+}
+.console-chip.is-selected {
+  background: var(--color-text);
+  color: var(--color-bg);
+  border-color: var(--color-text);
+}
+.console-chip-sub {
+  font-size: 15px;
+  opacity: 0.8;
+}
+.console-chip.is-selected .console-chip-sub {
+  opacity: 0.7;
+}
+
+.console-readiness-line {
+  font-size: 17px;
+  line-height: 1.7;
+  opacity: 0.85;
+  margin: 16px 0 0;
+  /* This element also carries the legacy `.deck-band-line` class, kept
+     ONLY so `tests/stage/verify-b5.manual.cjs`'s existing selector still
+     resolves (that script's own header says it stays as historical
+     evidence, not to be edited). That class's OWN rule in `stage.css`
+     leaks a stage-unit-scaled `max-inline-size` in here (the exact
+     defect this override closes — found live via computed-style check,
+     worklog-B6.md) — explicitly neutralised. */
+  max-inline-size: none;
+}
+
+/* addendum §5 fix #1 — "the change to ship first": the primary action
+   becomes reachable at every viewport UNCONDITIONALLY, independent of how
+   tall the flowed content above it is. */
+.console-action-bar {
+  flex: 0 0 auto;
+  position: sticky;
+  inset-block-end: 0;
+  display: flex;
+  justify-content: center;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+  background: var(--color-bg);
+  border-block-start: 1px solid #2A2F38;
+  z-index: 2;
+}
+
+.console-primary-button {
+  inline-size: 100%;
+  max-inline-size: 720px;
+  min-block-size: 56px;
+  border-radius: 12px;
+  border: none;
+  background: var(--color-text);
+  color: var(--color-bg);
+  font-family: inherit;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.console-primary-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+@media (min-width: 600px) {
+  .console-title { font-size: 29px; }
+  .console-field-label { font-size: 16px; }
+  .console-input { font-size: 20px; }
+  .console-field-grid { grid-template-columns: 1fr 1fr; }
+  .console-inline-label { font-size: 19px; }
+  .console-chip { font-size: 20px; }
+  .console-chip-sub { font-size: 16px; }
+  .console-readiness-line { font-size: 19px; }
+  .console-primary-button { font-size: 20px; }
+  .console-body { padding-inline: 24px; }
+}
+
+@media (min-width: 1024px) {
+  .console-title { font-size: 32px; }
+  .console-field-label { font-size: 17px; }
+  .console-input { font-size: 22px; }
+  .console-inline-label { font-size: 21px; }
+  .console-chip { font-size: 21px; }
+  .console-chip-sub { font-size: 17px; }
+  .console-readiness-line { font-size: 21px; }
+  .console-primary-button { font-size: 21px; }
+  .console-section { margin-block-end: 32px; }
+}

@@ -1,0 +1,240 @@
+{
+  "perSize": [
+    {
+      "size": "native-1920x1080",
+      "before": {
+        "found": true,
+        "rect": {
+          "top": 1012,
+          "bottom": 1068,
+          "left": 600,
+          "right": 1320
+        },
+        "viewportW": 1920,
+        "viewportH": 1080,
+        "fullyInViewportNoScroll": true,
+        "stageRootHidden": true,
+        "smallTargets": [],
+        "inputFontSizes": [
+          {
+            "label": "اسم الفريق الأول",
+            "fontSizePx": 22
+          },
+          {
+            "label": "اسم الفريق الثاني",
+            "fontSizePx": 22
+          }
+        ],
+        "inputFontSizeAllAtLeast16": true
+      },
+      "clickResult": "ok",
+      "afterPhase": {
+        "reachedDrawOrPlay": true
+      }
+    },
+    {
+      "size": "reported-1436x926",
+      "before": {
+        "found": true,
+        "rect": {
+          "top": 858,
+          "bottom": 914,
+          "left": 358,
+          "right": 1078
+        },
+        "viewportW": 1436,
+        "viewportH": 926,
+        "fullyInViewportNoScroll": true,
+        "stageRootHidden": true,
+        "smallTargets": [],
+        "inputFontSizes": [
+          {
+            "label": "اسم الفريق الأول",
+            "fontSizePx": 22
+          },
+          {
+            "label": "اسم الفريق الثاني",
+            "fontSizePx": 22
+          }
+        ],
+        "inputFontSizeAllAtLeast16": true
+      },
+      "clickResult": "ok",
+      "afterPhase": {
+        "reachedDrawOrPlay": true
+      }
+    },
+    {
+      "size": "laptop-1366x768",
+      "before": {
+        "found": true,
+        "rect": {
+          "top": 700,
+          "bottom": 756,
+          "left": 323,
+          "right": 1043
+        },
+        "viewportW": 1366,
+        "viewportH": 768,
+        "fullyInViewportNoScroll": true,
+        "stageRootHidden": true,
+        "smallTargets": [],
+        "inputFontSizes": [
+          {
+            "label": "اسم الفريق الأول",
+            "fontSizePx": 22
+          },
+          {
+            "label": "اسم الفريق الثاني",
+            "fontSizePx": 22
+          }
+        ],
+        "inputFontSizeAllAtLeast16": true
+      },
+      "clickResult": "ok",
+      "afterPhase": {
+        "reachedDrawOrPlay": true
+      }
+    },
+    {
+      "size": "laptop-1280x800",
+      "before": {
+        "found": true,
+        "rect": {
+          "top": 732,
+          "bottom": 788,
+          "left": 280,
+          "right": 1000
+        },
+        "viewportW": 1280,
+        "viewportH": 800,
+        "fullyInViewportNoScroll": true,
+        "stageRootHidden": true,
+        "smallTargets": [],
+        "inputFontSizes": [
+          {
+            "label": "اسم الفريق الأول",
+            "fontSizePx": 22
+          },
+          {
+            "label": "اسم الفريق الثاني",
+            "fontSizePx": 22
+          }
+        ],
+        "inputFontSizeAllAtLeast16": true
+      },
+      "clickResult": "ok",
+      "afterPhase": {
+        "reachedDrawOrPlay": true
+      }
+    },
+    {
+      "size": "phone-portrait-390x844",
+      "before": {
+        "found": true,
+        "rect": {
+          "top": 776,
+          "bottom": 832,
+          "left": 32,
+          "right": 358
+        },
+        "viewportW": 390,
+        "viewportH": 844,
+        "fullyInViewportNoScroll": true,
+        "stageRootHidden": true,
+        "smallTargets": [],
+        "inputFontSizes": [
+          {
+            "label": "اسم الفريق الأول",
+            "fontSizePx": 18
+          },
+          {
+            "label": "اسم الفريق الثاني",
+            "fontSizePx": 18
+          }
+        ],
+        "inputFontSizeAllAtLeast16": true
+      },
+      "clickResult": "ok",
+      "afterPhase": {
+        "reachedDrawOrPlay": true
+      }
+    },
+    {
+      "size": "phone-portrait-360x640",
+      "before": {
+        "found": true,
+        "rect": {
+          "top": 572,
+          "bottom": 628,
+          "left": 32,
+          "right": 328
+        },
+        "viewportW": 360,
+        "viewportH": 640,
+        "fullyInViewportNoScroll": true,
+        "stageRootHidden": true,
+        "smallTargets": [],
+        "inputFontSizes": [
+          {
+            "label": "اسم الفريق الأول",
+            "fontSizePx": 18
+          },
+          {
+            "label": "اسم الفريق الثاني",
+            "fontSizePx": 18
+          }
+        ],
+        "inputFontSizeAllAtLeast16": true
+      },
+      "clickResult": "ok",
+      "afterPhase": {
+        "reachedDrawOrPlay": true
+      }
+    },
+    {
+      "size": "phone-landscape-844x390",
+      "before": {
+        "found": true,
+        "rect": {
+          "top": 322,
+          "bottom": 378,
+          "left": 62,
+          "right": 782
+        },
+        "viewportW": 844,
+        "viewportH": 390,
+        "fullyInViewportNoScroll": true,
+        "stageRootHidden": true,
+        "smallTargets": [],
+        "inputFontSizes": [
+          {
+            "label": "اسم الفريق الأول",
+            "fontSizePx": 20
+          },
+          {
+            "label": "اسم الفريق الثاني",
+            "fontSizePx": 20
+          }
+        ],
+        "inputFontSizeAllAtLeast16": true
+      },
+      "clickResult": "ok",
+      "afterPhase": {
+        "reachedDrawOrPlay": true
+      }
+    }
+  ],
+  "v39StageUnitLeakage": {
+    "matches": 0,
+    "pass": true
+  },
+  "allPass": true,
+  "noPositionFixedInConsoleCss": true,
+  "tier1Containment": {
+    "visible": true,
+    "scrollHeight": 1080,
+    "clientHeight": 1080,
+    "contained": true
+  }
+}

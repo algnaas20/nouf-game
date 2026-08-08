@@ -175,6 +175,37 @@ export function mountApp(root: HTMLElement): void {
       }
     }
 
+    // Tier 2 ("console") screens — `rtl-stage-ux-expert`'s
+    // `addendum-small-screens-2026-08-08.md` (worklog-B6.md): a normal
+    // scrolling document on `src/styles/console.css`'s CSS-px scale, never
+    // `--stage-unit`, never `position: fixed`. Mounted as a SIBLING of
+    // `.stage-root` (`wrap`), same reason and same pattern as
+    // `editorHost` above — a fixed 1920x1080 `overflow: hidden` canvas
+    // silently clips content whose height is not bounded by construction
+    // (two typed team names, a variable readiness message), which is
+    // exactly the live-user defect this phase fixes (worklog-B6.md).
+    // Currently used by `team-setup` only — `home`/`resume-prompt`/
+    // `deck-mismatch` are short, fixed-shape screens that do not overflow
+    // the canvas today and are deliberately NOT reassigned this session
+    // (disclosed scope cut, worklog-B6.md); reassigning them later is a
+    // one-line change per screen using this same `mountConsole` helper.
+    let consoleHost: HTMLElement | null = null;
+    function teardownConsole(): void {
+      if (consoleHost) {
+        consoleHost.remove();
+        consoleHost = null;
+      }
+    }
+    function mountConsole(build: (container: HTMLElement) => void): void {
+      teardownEditor();
+      wrap.hidden = true;
+      if (!consoleHost) {
+        consoleHost = document.createElement('div');
+        root.append(consoleHost);
+      }
+      build(consoleHost);
+    }
+
     function setMediaUi(patch: Partial<MediaUiState>): void {
       mediaUi = { ...mediaUi, ...patch };
       render();
@@ -210,9 +241,18 @@ export function mountApp(root: HTMLElement): void {
         cancelHandoff = null;
       }
 
-      if (localPhase !== 'editor') {
+      // Tier bookkeeping — see `mountConsole`'s own doc comment above.
+      // `team-setup` tears down the editor and hides `wrap` itself, inside
+      // `mountConsole` below, without touching `consoleHost` (the same
+      // sibling element is reused/redrawn across re-renders while this
+      // phase stays active). Every OTHER phase tears down both the editor
+      // and the console host and restores `wrap`.
+      if (localPhase !== 'editor' && localPhase !== 'team-setup') {
         teardownEditor();
+        teardownConsole();
         wrap.hidden = false;
+      } else if (localPhase === 'editor') {
+        teardownConsole();
       }
 
       if (localPhase === 'home') {
@@ -296,19 +336,29 @@ export function mountApp(root: HTMLElement): void {
       }
 
       if (localPhase === 'team-setup') {
-        renderTeamSetupScreen(wrap, {
-          deckSize: deck.length,
-          onConfirm: ({ teamNames, N }) => {
-            pendingTeamNames = teamNames;
-            pendingN = N;
-            drawnFirstTeam = Math.random() < 0.5 ? 'A' : 'B';
-            localPhase = 'draw';
-            render();
-          },
-          onBack: () => {
-            localPhase = 'home';
-            render();
-          },
+        // Tier 2 (worklog-B6.md) — mounted OUTSIDE `.stage-root`, a normal
+        // scrolling document; see `mountConsole`'s doc comment above and
+        // `team-setup.ts`'s own header comment for why.
+        mountConsole((consoleContainer) => {
+          renderTeamSetupScreen(consoleContainer, {
+            deckSize: deck.length,
+            onConfirm: ({ teamNames, N }) => {
+              pendingTeamNames = teamNames;
+              pendingN = N;
+              drawnFirstTeam = Math.random() < 0.5 ? 'A' : 'B';
+              localPhase = 'draw';
+              // Tier 2 -> Tier 1 transition (addendum §2.3): reset scroll
+              // before the fixed canvas takes over, so a host who scrolled
+              // down to reach «ابدأ» does not land mid-scroll on the draw
+              // screen underneath it.
+              window.scrollTo(0, 0);
+              render();
+            },
+            onBack: () => {
+              localPhase = 'home';
+              render();
+            },
+          });
         });
         return;
       }
