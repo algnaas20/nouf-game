@@ -1,10 +1,11 @@
-import type { TeamId } from '../contracts';
+import type { GameEvent, TeamId } from '../contracts';
 import { renderHomeScreen } from './screens/home';
 import { renderTeamSetupScreen } from './screens/team-setup';
 import { renderQuestionScreen } from './screens/question';
 import { renderMazeBeat, type MazeBeatMode } from './screens/maze-beat';
 import { renderTurnHandoff, type HandoffKind } from './screens/turn-handoff';
 import { renderEndingScreen, computeNextFirstTeam } from './screens/ending';
+import { renderResumePromptScreen, renderDeckMismatchScreen } from './screens/resume-prompt';
 import { initialMediaUiState, type MediaUiState } from './screens/media-ui-state';
 import { GameDriver, findAnswerChosen, findNoAnswer, findMoveApplied, findTurnPassed, findGameEnded, findQuestionShown, isAudienceDecision, isDecisiveEnding } from './session/game-driver';
 import { buildDemoDeck } from './session/demo-deck';
@@ -14,6 +15,15 @@ import { computeDeckHash } from './session/deck-hash';
 // reached only from the home screen. Not a mode toggle."). Import only —
 // `src/editor/**` stays WL-C-owned; nothing here reaches into its internals.
 import { mountEditor } from '../editor/app';
+// PH-A4 (WL-A) — `checkResume()`'s `ResumeCheck` is the complete data
+// contract for the prompt below; this file only ever READS it and never
+// mutates storage directly except via the one explicit `clearSession()`
+// call on the two refusal/decline paths (§6.3 — never a silent auto-delete
+// of a resumable session; `clearSession()` here is only ever called either
+// on a session that was already unrecoverable ('corrupt'), or after the
+// operator explicitly chose «جلسة جديدة»).
+import { checkResume, clearSession } from '../core/session-store';
+import { fold } from '../core/fold';
 
 /** No client-side router (D-11) — a plain state switch inside one root
  *  element, now driven by the REAL `src/core` state machine (`GameDriver`)
@@ -24,10 +34,36 @@ export function mountApp(root: HTMLElement): void {
   const deckHash = computeDeckHash(deck);
 
   let driver = new GameDriver(deck);
-  let localPhase: 'home' | 'editor' | 'team-setup' | 'draw' | 'playing' = 'home';
+  let localPhase: 'home' | 'editor' | 'team-setup' | 'draw' | 'playing' | 'resume-prompt' | 'deck-mismatch' = 'home';
   let drawnFirstTeam: TeamId = 'A';
   let pendingTeamNames: [string, string] = ['', ''];
   let pendingN = 10;
+
+  // PH-A4 — classified ONCE, at cold start, before the first `render()`.
+  // A resumable session only ever exists right after a real reload/
+  // interruption; nothing later in this same tab's lifetime can produce a
+  // new one to check for (every subsequent log mutation goes through
+  // `GameDriver`'s own `persist()`, which this same tab's `driver` is
+  // already the source of truth for).
+  let resumableEvents: GameEvent[] | null = null;
+  {
+    const resumeCheck = checkResume(deckHash);
+    if (resumeCheck.kind === 'available') {
+      resumableEvents = resumeCheck.events;
+      localPhase = 'resume-prompt';
+    } else if (resumeCheck.kind === 'refused' && resumeCheck.reason === 'deck-mismatch') {
+      localPhase = 'deck-mismatch';
+    } else if (resumeCheck.kind === 'refused' && resumeCheck.reason === 'corrupt') {
+      // Nothing legible to refuse against — a corrupt/unparseable payload
+      // has no recoverable content, so there is nothing a host could
+      // meaningfully choose to keep. Silently cleared rather than shown as
+      // a dead-end screen with no real choice on it (constraint row 17:
+      // technical detail never reaches the stage). Disclosed, not hidden —
+      // see the worklog.
+      clearSession();
+    }
+    // 'none' → stays 'home', the pre-PH-A4 default behaviour, unchanged.
+  }
 
   let mediaUi: MediaUiState = initialMediaUiState();
   let lastUiQuestionId: string | null = null;
@@ -90,6 +126,49 @@ export function mountApp(root: HTMLElement): void {
         },
         onOpenEditor: () => {
           localPhase = 'editor';
+          render();
+        },
+      });
+      return;
+    }
+
+    if (localPhase === 'resume-prompt') {
+      // `resumableEvents` is guaranteed non-null here — it is set in the
+      // same branch that sets `localPhase = 'resume-prompt'` at startup,
+      // and nothing else can reach this branch.
+      const events = resumableEvents!;
+      // `fold()` — the same function `GameDriver`'s own constructor calls —
+      // read directly here only to show the context line; the actual
+      // resume (below) still goes through the one real `GameDriver`
+      // construction path, never a second reconstruction.
+      const resumedState = fold(events);
+      renderResumePromptScreen(wrap, {
+        teamNames: resumedState.teamNames,
+        positions: resumedState.positions,
+        N: resumedState.N,
+        onContinue: () => {
+          // Re-enter play with the EXACT stored log — `GameDriver`'s own
+          // constructor `fold()`s it, the same function that already
+          // regenerated `resumedState` above; no second reconstruction path.
+          driver = new GameDriver(deck, events);
+          localPhase = 'playing';
+          render();
+        },
+        onNewGame: () => {
+          clearSession(); // explicit operator choice — never silent (§6.3).
+          resumableEvents = null;
+          localPhase = 'home';
+          render();
+        },
+      });
+      return;
+    }
+
+    if (localPhase === 'deck-mismatch') {
+      renderDeckMismatchScreen(wrap, {
+        onNewGame: () => {
+          clearSession();
+          localPhase = 'home';
           render();
         },
       });

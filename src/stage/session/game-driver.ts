@@ -17,6 +17,7 @@
 import type { GameEvent, GameState, Outcome, Question, TeamId } from '../../contracts';
 import { fold, undo as coreUndo, commit as coreCommit } from '../../core/fold';
 import { legalEvents, type GameContext } from '../../core/legal';
+import { saveSession, clearSession } from '../../core/session-store';
 
 export interface StartParams {
   teamNames: [string, string];
@@ -31,9 +32,39 @@ export class GameDriver {
   private events: GameEvent[] = [];
   private cachedState: GameState;
 
-  constructor(deck: readonly Question[]) {
+  /**
+   * `initialEvents` is how a resumed session re-enters play (PH-A4/§6.3):
+   * `checkResume()`'s `ResumeCheck.events` — the SAME raw event log
+   * `fold()` already regenerated `state` from — is handed straight back in
+   * here, so a resumed driver is not a special code path with its own
+   * rules; it is the exact same `GameDriver` a fresh game uses, just
+   * pre-loaded. Defaults to `[]` (a brand-new game), so every existing
+   * `new GameDriver(deck)` call site is unaffected.
+   */
+  constructor(deck: readonly Question[], initialEvents: readonly GameEvent[] = []) {
     this.deck = deck;
+    this.events = [...initialEvents];
     this.cachedState = fold(this.events);
+  }
+
+  /**
+   * The single place `saveSession`/`clearSession` (WL-A's
+   * `src/core/session-store.ts`) are called from — every log-mutating
+   * operation below (`start`, a successfully applied `commit`, `undo`)
+   * routes through here, so "the game in progress is being persisted as it
+   * is played" is true by construction, not by remembering to call it at
+   * each call site. A `FINISHED` state clears the stored session instead of
+   * saving it — `checkResume()` already treats a stored `FINISHED` log as
+   * `{ kind: 'none' }` (nothing left to resume into), so this is hygiene
+   * (no stale finished-game payload lingering in `localStorage`), not a
+   * behaviour change; disclosed in the worklog as a deliberate choice.
+   */
+  private persist(): void {
+    if (this.cachedState.stateId === 'FINISHED') {
+      clearSession();
+    } else {
+      saveSession(this.events);
+    }
   }
 
   get state(): GameState {
@@ -81,6 +112,11 @@ export class GameDriver {
     const result = coreCommit(this.events, event);
     this.events = result.events;
     this.cachedState = result.state;
+    // Only a genuinely applied event changes the log — a stale/double-tap
+    // commit that `coreCommit` silently ignored must not re-persist an
+    // unchanged log (harmless, since it would write the same bytes, but
+    // pointless work on every ignored double-tap).
+    if (result.applied) this.persist();
     return result.applied;
   }
 
@@ -105,6 +141,10 @@ export class GameDriver {
     const result = coreUndo(this.events);
     this.events = result.events;
     this.cachedState = result.state;
+    // Undoing out of FINISHED (e.g. the operator undoes the final answer)
+    // re-persists the now-shorter, still-in-progress log — `persist()`
+    // re-reads `this.cachedState` fresh, so this is never stale.
+    this.persist();
   }
 }
 

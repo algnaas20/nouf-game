@@ -742,3 +742,21 @@ body {
 .editor-shell-body {
   padding: 0 16px 32px;
 }
+
+/* ================= Resume prompt / deck-mismatch refusal (session persistence) ================= */
+
+.resume-prompt-screen .status-strip {
+  inline-size: 100%;
+  max-inline-size: calc(1000 * var(--stage-unit));
+  block-size: auto;
+}
+.resume-track-line {
+  margin: 0;
+  opacity: 0.85;
+  max-inline-size: calc(1000 * var(--stage-unit));
+  text-align: center;
+}
+.resume-prompt-buttons {
+  display: flex;
+  gap: calc(32 * var(--stage-unit));
+}

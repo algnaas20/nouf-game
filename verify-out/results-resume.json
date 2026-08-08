@@ -1,0 +1,84 @@
+{
+  "scenario1_resumeAndContinue": {
+    "rawSessionExistedBeforeReload": true,
+    "preReload": {
+      "scores": [
+        "0",
+        "0"
+      ],
+      "questionText": "ما اسم الحيوان المعروف بسفينة الصحراء؟",
+      "turnHeader": "فريق الفريق الأزرق يوجّه السؤال ← فريق الفريق البرتقالي يجاوب"
+    },
+    "resumeScreen": {
+      "heading": "توجد جلسة سابقة لم تكتمل",
+      "hasStatusStrip": true,
+      "scores": [
+        "0",
+        "0"
+      ],
+      "buttons": [
+        "تكملة الجلسة",
+        "جلسة جديدة"
+      ]
+    },
+    "postResume": {
+      "scores": [
+        "0",
+        "0"
+      ],
+      "questionText": "ما اسم الحيوان المعروف بسفينة الصحراء؟",
+      "turnHeader": "فريق الفريق الأزرق يوجّه السؤال ← فريق الفريق البرتقالي يجاوب"
+    },
+    "questionTextMatches": true,
+    "scoresMatch": true,
+    "turnHeaderMatches": true,
+    "pageErrors": []
+  },
+  "scenario1b_declineAndStartFresh": {
+    "sawResumePrompt": true,
+    "afterDecline": {
+      "onHome": [
+        "ابدأ اللعبة",
+        "أسئلتي",
+        "تراجُع"
+      ],
+      "sessionCleared": true
+    }
+  },
+  "scenario2_deckMismatch": {
+    "mismatchScreen": {
+      "heading": "تغيّرت أسئلتك منذ آخر مرة",
+      "explanation": "الجلسة القديمة لا يمكن إكمالها بأسئلة مختلفة — ابدأ جلسة جديدة بأسئلتك الحالية.",
+      "buttons": [
+        "جلسة جديدة"
+      ],
+      "bodyTextIncludesRawHash": false
+    },
+    "afterClick": {
+      "onHome": [
+        "ابدأ اللعبة",
+        "أسئلتي",
+        "تراجُع"
+      ],
+      "sessionCleared": true
+    }
+  },
+  "scenario3_structurallyCorruptPayload": {
+    "onHome": [
+      "ابدأ اللعبة",
+      "أسئلتي",
+      "تراجُع"
+    ],
+    "resumePromptShown": false,
+    "sessionCleared": true
+  },
+  "scenario3b_syntacticallyInvalidJson": {
+    "onHome": [
+      "ابدأ اللعبة",
+      "أسئلتي",
+      "تراجُع"
+    ],
+    "resumePromptShown": false,
+    "rawStillPresentButHarmless": true
+  }
+}
