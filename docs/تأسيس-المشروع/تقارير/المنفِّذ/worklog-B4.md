@@ -237,3 +237,98 @@ Written after all of the above ran for real (v3 §8 discipline — never before)
 | 5 | `.editor-shell`'s minimal CSS (background/color/font-family/back-bar) is WL-B's own addition, not styling WL-C's own content | Everything inside `.editor-shell-body` remains exactly WL-C's `editor.css` — I did not touch or restyle any editor-internal element. |
 
 **PH-B4 (+ Task 1 + Task 2) — final status: all measured PASS**, four real bugs found and fixed along the way (one product defect — V6 image/options swap; one CSS layout bug — editor-shell black-void; two test-harness bugs — V4 inline-span overflow, V14 wrong anchor edge), all disclosed with red→green proof, none smoothed over.
+
+---
+
+# Addendum (2026-08-08) — the resume prompt + `saveSession` wiring, PH-A4's visible half
+
+**Appended per v3 §15.2 — not a new ceremony report.** WL-A finished PH-A4 (`src/core/session-store.ts`: `saveSession`/`loadRawSession`/`checkResume`/`clearSession`, proven live via a real `page.reload()` — `worklog-A4.md`) and correctly stopped at the file-ownership line: the resume prompt screen and wiring `saveSession` into `src/stage/session/game-driver.ts` are both WL-B's. This addendum closes that.
+
+## Closing-claims list (this addendum)
+
+| # | Claim | Status | Evidence |
+|---|---|---|---|
+| A4-1 | `GameDriver` accepts pre-existing events (resume re-entry), default `[]` unchanged for every existing call site | **Done, `tsc` clean** | §A |
+| A4-2 | `saveSession`/`clearSession` wired into the ONE place every log mutation flows through (`persist()`, called from `commit`/`undo`) — not scattered per call site | **Done, red→green proven** | §A, §D |
+| A4-3 | `checkResume(deckHash)` classified once at cold start; three outcomes handled: available, deck-mismatch, corrupt | **Done, all three proven live** | §B, §C |
+| A4-4 | Resume screen: literal «تكملة الجلسة»/«جلسة جديدة», context line proves (not just claims) this is the real interrupted game | **Measured PASS, screenshot** | §C |
+| A4-5 | Deck-mismatch refusal: legible, composed (not literal-sourced, disclosed), never leaks the raw hash strings to the stage | **Measured PASS, screenshot** | §C |
+| A4-6 | Real interruption, real browser, real reload, room-visible proof (question text / scores / turn all restored) | **Measured PASS** | §C |
+| A4-7 | No regression to the rest of WL-B's suite from wiring real `localStorage` writes into live play | **Re-confirmed, one latent multi-page-per-browser trap documented, not a failure** | §E |
+
+## A. `GameDriver` — resume re-entry + the one persistence choke point
+
+`src/stage/session/game-driver.ts` (WL-B-owned):
+- Constructor gained an optional second parameter, `initialEvents: readonly GameEvent[] = []` — a resumed session hands `checkResume()`'s own `ResumeCheck.events` straight back in, `fold()`ed by the exact same code path a fresh game uses. Every pre-existing `new GameDriver(deck)` call site is unaffected (default `[]`).
+- A new private `persist()` method is the **only** place `saveSession`/`clearSession` (`../../core/session-store`, WL-A's) are called from: `commit()` calls it whenever `coreCommit` actually applied the event (not on an ignored stale/double-tap commit); `undo()` calls it unconditionally (re-persisting the shorter, still-in-progress log, including the case of undoing out of `FINISHED`). Reaching `FINISHED` clears the session instead of saving it — hygiene, not a behaviour change (`checkResume()` already treats a stored `FINISHED` log as `{kind:'none'}`).
+- **Red→green, pasted** (temporarily changed `if (result.applied) this.persist();` to `if (false && result.applied) this.persist();`, re-measured, reverted, re-measured again — a throwaway Playwright probe, deleted after use, never committed):
+  ```
+  BEFORE (persist() disabled): rawSessionAfterRealGameStart: null   — a real GAME_STARTED+QUESTION_SHOWN, never saved
+  AFTER  (persist() restored):  rawSessionAfterRealGameStart: "{\"events\":[{\"type\":\"GAME_STARTED\",...}]}"  — real payload
+  ```
+
+## B. `app.ts` — classifying `checkResume()` once, at cold start
+
+`src/stage/app.ts` (WL-B-owned): `checkResume(deckHash)` is called exactly once, before the first `render()`, in a block that sets `localPhase` to one of `'resume-prompt'` / `'deck-mismatch'` / (unchanged) `'home'`:
+- `kind: 'available'` → `localPhase = 'resume-prompt'`, the resumable events stashed in a closure variable.
+- `kind: 'refused', reason: 'deck-mismatch'` → `localPhase = 'deck-mismatch'`.
+- `kind: 'refused', reason: 'corrupt'` → `clearSession()` immediately, silently, `localPhase` stays `'home'`. **Deliberate, disclosed choice**: a payload that is structurally invalid (parses as JSON, wrong shape) has no recoverable content — there is no real choice for a dead-end screen to offer, and constraint row 17 (calm sentence, never raw technical detail on stage) argues against inventing one. Confirmed this is genuinely reachable and distinct from a syntax-invalid payload (§C, scenario 3 vs 3b).
+- `kind: 'none'` → unchanged pre-existing behaviour.
+
+## C. `src/stage/screens/resume-prompt.ts` (new file, WL-B-owned) — the two screens
+
+- `renderResumePromptScreen`: composed heading «توجد جلسة سابقة لم تكتمل» (no literal source — only the two button labels are scripted in Appendix أ), then **the SAME `chrome.ts` `buildStatusStrip` component the room saw live mid-game**, then a composed track-length line, then the two literal buttons «تكملة الجلسة» (primary) / «جلسة جديدة» (secondary). Reusing the real status-strip component is the deliberate proof mechanism — not a generic "a session was found" notice, but visible continuity with what the room already saw.
+- `renderDeckMismatchScreen`: composed heading «تغيّرت أسئلتك منذ آخر مرة» + composed explanation «الجلسة القديمة لا يمكن إكمالها بأسئلة مختلفة — ابدأ جلسة جديدة بأسئلتك الحالية.» + the single button «جلسة جديدة» (same literal word, one vocabulary). **`storedDeckHash`/`currentDeckHash` never reach this screen** — confirmed live (§below, `bodyTextIncludesRawHash: false`).
+- **Both authored strings are disclosed, not presented as scripted** — same discipline as `ending.ts`'s «تعادل» headline (worklog-B2.md/worklog-B3.md already flagged that one; this is the second, flagged here at the point of authorship, per the coordinator's explicit instruction this session).
+
+**Live proof, real Chromium, real `localStorage`, real `page.reload()`** (`tests/stage/verify-resume.manual.cjs`, `verify-out/results-resume.json`):
+
+```json
+"scenario1_resumeAndContinue": {
+  "preReload":  { "scores": ["0","0"], "questionText": "ما اسم الحيوان المعروف بسفينة الصحراء؟", "turnHeader": "فريق الفريق الأزرق يوجّه السؤال ← فريق الفريق البرتقالي يجاوب" },
+  "resumeScreen": { "heading": "توجد جلسة سابقة لم تكتمل", "hasStatusStrip": true, "scores": ["0","0"], "buttons": ["تكملة الجلسة","جلسة جديدة"] },
+  "postResume": { "scores": ["0","0"], "questionText": "ما اسم الحيوان المعروف بسفينة الصحراء؟", "turnHeader": "فريق الفريق الأزرق يوجّه السؤال ← فريق الفريق البرتقالي يجاوب" },
+  "questionTextMatches": true, "scoresMatch": true, "turnHeaderMatches": true, "pageErrors": []
+}
+"scenario1b_declineAndStartFresh": { "sawResumePrompt": true, "afterDecline": { "onHome": ["ابدأ اللعبة","أسئلتي","تراجُع"], "sessionCleared": true } }
+"scenario2_deckMismatch": {
+  "mismatchScreen": { "heading": "تغيّرت أسئلتك منذ آخر مرة", "buttons": ["جلسة جديدة"], "bodyTextIncludesRawHash": false },
+  "afterClick": { "onHome": ["ابدأ اللعبة","أسئلتي","تراجُع"], "sessionCleared": true }
+}
+"scenario3_structurallyCorruptPayload": { "onHome": [...3 buttons...], "resumePromptShown": false, "sessionCleared": true }
+"scenario3b_syntacticallyInvalidJson": { "onHome": [...3 buttons...], "resumePromptShown": false, "rawStillPresentButHarmless": true }
+```
+
+Scenario 3 vs 3b is a real distinction in `session-store.ts`'s own contract, not two redundant tests: a **structurally valid JSON payload whose first event isn't `GAME_STARTED`** reaches `checkResume`'s literal `'corrupt'` branch (my `app.ts` code explicitly clears it); a **syntactically invalid JSON string** is already caught by `loadRawSession`'s own `try`/`catch` and reported as `{kind:'none'}` **before** `checkResume` ever runs its own logic — the stale bytes are left in `localStorage` harmlessly (never re-surfaced, since every future `loadRawSession` call reads it as absent too). Screenshots: `verify-out/resume-prompt-screen.png`, `verify-out/deck-mismatch-screen.png`, `verify-out/resumed-question-screen.png` (all reviewed).
+
+**Disclosed, not hidden**: the resumed image question in `resumed-question-screen.png` shows Beat 1 (not whatever beat was showing at interruption) — `mediaUi` (which image beat, audio playback phase) is transient UI-only state, deliberately **not** part of the persisted event log (per PH-A4's own explicit restored-field list: positions/attempts/turn/usedQuestionIds/rng draw index/option order — media-UI phase was never on that list). Resuming always re-enters at the question's natural first beat, which is correct, not a bug.
+
+## D. Two real test-harness bugs found and fixed while building `verify-resume.manual.cjs` (not product bugs)
+
+1. **`page.click('text=جلسة جديدة')` is ambiguous on the deck-mismatch screen** — a bare Playwright `text=` selector substring-matches the WHOLE page; the screen's own explanation paragraph literally contains the phrase "...ابدأ **جلسة جديدة** بأسئلتك..." as a substring, so the selector matched both that non-interactive `<p>` and the real `<button>`. Playwright silently resolved to the (inert) paragraph — clicking did nothing, no error thrown. **Fixed** by scoping every button click in the script to `button:has-text(...)` instead of bare `text=`. Confirmed via a native `element.click()` probe first (bypassing Playwright's selector engine entirely) that the REAL button/handler worked correctly all along — this was purely a test-selector bug.
+2. **The `answerOnce` helper's loop order kept re-clicking an already-answered, already-revealed option card forever on audio questions.** `question-audio.ts`'s option cards keep their DOM `disabled` attribute `false` even after `p.revealed` becomes true (`disabled: !optionsRevealed`, which never flips back) — so `.option-card:not([disabled])` kept matching post-reveal, and the loop re-clicked a card whose `onChoose` handler correctly no-ops on `p.revealed` (never a product bug), instead of ever reaching «السؤال التالي». **Fixed** by checking for `.result-banner` (already revealed) first and prioritizing the continue button once present.
+
+## E. Regression check — the rest of WL-B's suite, after wiring real `localStorage` writes into live play
+
+Re-ran `verify-pack.manual.cjs`, `verify-b2.manual.cjs`, `verify-b3.manual.cjs`, `verify-editor-entry.manual.cjs`, `verify-resolve-media-url.manual.cjs` — all still green, same numbers as before this addendum (V13 still 3 buttons incl. «أسئلتي» all ≥240×96, V24 still 2 actions, v1Recheck/v3Recheck unchanged).
+
+**One latent trap identified, not a current failure, disclosed for future script authors**: `verify-pack.manual.cjs` (and the others) open multiple `browser.newPage()` instances from the **same** `browser` — `localStorage` is scoped per browser *context*, not per page, so a check that plays far enough to reach a real `GAME_STARTED` now leaves a resumable session that a LATER check's fresh `page.goto()` (in the same script run) would see as `'resume-prompt'` instead of `'home'`. No CURRENT check in any script happens to be ordered after such a check while also depending on landing on `'home'`, so nothing broke — but it is fragile against future reordering. **Documented in `docs/بروتوكولات/arabic-stage-screenshots.md`** (added a short note) so a future script author either clears `localStorage` before `page.goto` or uses `browser.newContext()` per independent scenario.
+
+## Full project checks (this addendum, final)
+
+- `npx tsc --noEmit`: **exit 0, 0 errors** (the WL-C break from the base worklog is gone — fixed and merged upstream, per the coordinator's own note).
+- `npx vitest run`: **12 test files, 64 tests, all passed.**
+- `tests/stage/verify-resume.manual.cjs`: all 5 scenarios green, pasted above.
+- Regression: `verify-pack`/`verify-b2`/`verify-b3`/`verify-editor-entry`/`verify-resolve-media-url` all still green.
+- Port 3011: verified free after teardown (killed only the exact PID `npx vite --port 3011 --strictPort` started, looked up by port).
+- `git status --short`: `src/stage/app.ts`, `src/stage/session/game-driver.ts`, `src/styles/stage.css` modified; `src/stage/screens/resume-prompt.ts` (new), `tests/stage/verify-resume.manual.cjs` (new), `verify-out/results-resume.json` + 3 screenshots (new evidence, same pattern as prior phases). Nothing outside WL-B ownership touched.
+
+## Known limitations / disclosed, not hidden (this addendum)
+
+| # | Item | Detail |
+|---|---|---|
+| 1 | Resumed media-question UI state (image beat / audio playback phase) always restarts at the natural first beat | By design — `mediaUi` is transient, never persisted (§C). Not a bug, but worth stating explicitly since it is a visible difference from the exact pre-interruption pixel state. |
+| 2 | The multi-`page`-per-`browser` `localStorage` sharing trap (§E) is documented, not eliminated | Every current script happens not to be ordered in a way that trips it; a future script reordering could. Flagged in the protocol file. |
+| 3 | `resume-prompt.ts`'s two authored strings (heading + deck-mismatch explanation) are not in Appendix أ | Flagged explicitly per the coordinator's instruction — ready for the coordinator/documenter to fold in if desired, same as the earlier «تعادل» string. |
+
+**This addendum — final status: all measured PASS.** One new product file (`resume-prompt.ts`), two files wired (`app.ts`, `game-driver.ts`), the persistence choke point proven red→green, all five live scenarios (resume+continue, resume+decline, deck-mismatch, two distinct corrupt-payload paths) measured in a real browser with a real reload, two test-harness bugs found and fixed (disclosed, not silently corrected), zero regression to the rest of WL-B's suite.
