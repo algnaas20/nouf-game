@@ -9,6 +9,11 @@ import { initialMediaUiState, type MediaUiState } from './screens/media-ui-state
 import { GameDriver, findAnswerChosen, findNoAnswer, findMoveApplied, findTurnPassed, findGameEnded, findQuestionShown, isAudienceDecision, isDecisiveEnding } from './session/game-driver';
 import { buildDemoDeck } from './session/demo-deck';
 import { computeDeckHash } from './session/deck-hash';
+// WL-C's own doc comment on `mountEditor` names this exact import as the
+// intended integration point (خطة.md §5.4 — "same app, its own screen,
+// reached only from the home screen. Not a mode toggle."). Import only —
+// `src/editor/**` stays WL-C-owned; nothing here reaches into its internals.
+import { mountEditor } from '../editor/app';
 
 /** No client-side router (D-11) — a plain state switch inside one root
  *  element, now driven by the REAL `src/core` state machine (`GameDriver`)
@@ -19,7 +24,7 @@ export function mountApp(root: HTMLElement): void {
   const deckHash = computeDeckHash(deck);
 
   let driver = new GameDriver(deck);
-  let localPhase: 'home' | 'team-setup' | 'draw' | 'playing' = 'home';
+  let localPhase: 'home' | 'editor' | 'team-setup' | 'draw' | 'playing' = 'home';
   let drawnFirstTeam: TeamId = 'A';
   let pendingTeamNames: [string, string] = ['', ''];
   let pendingN = 10;
@@ -32,6 +37,22 @@ export function mountApp(root: HTMLElement): void {
   const wrap = document.createElement('div');
   wrap.className = 'stage-root';
   root.append(wrap);
+
+  // The editor is a normal scrolling document (`src/editor/editor.css`'s own
+  // header explicitly says so — "not the 1920x1080 stage"), so it must NOT
+  // be mounted inside `.stage-root` (`position: fixed`, `overflow: hidden`,
+  // clipped to the 16:9 canvas) — a question list past a couple of screens
+  // would be silently clipped. It is mounted as `wrap`'s SIBLING under the
+  // same outer `root`, and `wrap` itself is hidden (not removed — cheaper to
+  // restore, and it owns no state that would be lost) while the editor is
+  // showing.
+  let editorHost: HTMLElement | null = null;
+  function teardownEditor(): void {
+    if (editorHost) {
+      editorHost.remove();
+      editorHost = null;
+    }
+  }
 
   function setMediaUi(patch: Partial<MediaUiState>): void {
     mediaUi = { ...mediaUi, ...patch };
@@ -56,13 +77,35 @@ export function mountApp(root: HTMLElement): void {
       cancelHandoff = null;
     }
 
+    if (localPhase !== 'editor') {
+      teardownEditor();
+      wrap.hidden = false;
+    }
+
     if (localPhase === 'home') {
       renderHomeScreen(wrap, {
         onStart: () => {
           localPhase = 'team-setup';
           render();
         },
+        onOpenEditor: () => {
+          localPhase = 'editor';
+          render();
+        },
       });
+      return;
+    }
+
+    if (localPhase === 'editor') {
+      wrap.hidden = true;
+      if (!editorHost) {
+        editorHost = renderEditorShell(root, {
+          onBack: () => {
+            localPhase = 'home';
+            render();
+          },
+        });
+      }
       return;
     }
 
@@ -254,6 +297,52 @@ export function mountApp(root: HTMLElement): void {
   }
 
   render();
+}
+
+/**
+ * Wraps WL-C's `mountEditor` with a single «→ الرئيسية» back affordance —
+ * built and owned entirely here (WL-B's own markup/CSS), never inside
+ * `src/editor/**`, so file ownership stays absolute (`src/editor/**` is
+ * WL-C's; this shell is a caller, not an edit). This is the ONE way back
+ * out of the editor screen — deliberate, not automatic, matching §5.4's
+ * "not a mode toggle": the host must choose to leave, the same way he chose
+ * to enter.
+ *
+ * Appended as a SIBLING of `.stage-root` under `root` (never inside it) —
+ * `editor.css`'s own header says the editor is "not the 1920x1080 stage",
+ * a normal scrolling document, and `.stage-root` is `position: fixed` with
+ * `overflow: hidden` clipped to the 16:9 canvas, which would silently clip
+ * a question list of any real length.
+ */
+function renderEditorShell(root: HTMLElement, opts: { onBack: () => void }): HTMLElement {
+  const shell = document.createElement('div');
+  shell.className = 'editor-shell';
+  shell.dir = 'rtl';
+  shell.lang = 'ar';
+
+  const backBar = document.createElement('div');
+  backBar.className = 'editor-back-bar';
+  const backBtn = document.createElement('button');
+  backBtn.type = 'button';
+  backBtn.className = 'op-button type-operator-button editor-back-button';
+  backBtn.textContent = '→ الرئيسية';
+  backBtn.addEventListener('click', opts.onBack);
+  backBar.append(backBtn);
+
+  const editorContainer = document.createElement('div');
+  editorContainer.className = 'editor-shell-body';
+
+  shell.append(backBar, editorContainer);
+  root.append(shell);
+
+  // `mountEditor` is async (it awaits the IndexedDB draft load) — fire and
+  // forget from this synchronous `render()` pass; the editor paints itself
+  // into `editorContainer` once its own `store.load()` resolves, same as
+  // any other consumer of `mountEditor` (WL-C's own tests await it the same
+  // way from an already-mounted container).
+  void mountEditor(editorContainer);
+
+  return shell;
 }
 
 /** The chosen option for the just-revealed question, read from the event

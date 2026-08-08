@@ -1,0 +1,25 @@
+{
+  "homeButtons": [
+    "ابدأ اللعبة",
+    "أسئلتي",
+    "تراجُع"
+  ],
+  "afterOpen": {
+    "stageHidden": true,
+    "editorShellPresent": true,
+    "editorTitle": "أسئلتي",
+    "backButtonText": "→ الرئيسية",
+    "addQuestionButtonPresent": true
+  },
+  "afterBack": {
+    "stageHidden": false,
+    "editorShellPresent": false,
+    "homeButtonsPresent": [
+      "ابدأ اللعبة",
+      "أسئلتي",
+      "تراجُع"
+    ]
+  },
+  "reachedQuestion": true,
+  "pageErrors": []
+}

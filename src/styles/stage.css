@@ -418,7 +418,11 @@ body {
   flex: 1 1 auto;
   min-block-size: 0;
   display: grid;
-  grid-template-columns: 1fr auto;
+  /* Column 1 = the grid's start edge = the RIGHT under dir="rtl" — `auto`
+     here (the fixed-size image column, appended first in question-image.ts)
+     so the 660px image box sits flush against the right safe-area edge,
+     per stage-ux-investigation.md §6.2. `1fr` (options) takes the rest. */
+  grid-template-columns: auto 1fr;
   gap: calc(32 * var(--stage-unit));
   align-items: start;
 }
@@ -685,4 +689,56 @@ body {
   margin: 0;
   opacity: 0.85;
   max-inline-size: calc(1000 * var(--stage-unit));
+}
+
+/* ================= Home screen — «أسئلتي» secondary button (Task 2) ================= */
+
+/* Non-`--stage-unit` sizing on purpose: this button lives on the home
+   screen inside `.stage-safe`/`.centered-screen`, which ARE stage-unit
+   scaled, so it does not need its own scale — it inherits the surrounding
+   flex layout. Kept visually smaller/quieter than `.op-button.primary` so
+   the play-night action («ابدأ اللعبة») stays dominant (§5.4). */
+.home-secondary-button {
+  opacity: 0.75;
+}
+
+/* ================= Editor entry shell (Task 2) =================
+   `.editor-shell` is a SIBLING of `.stage-root`, not a child — see
+   src/stage/app.ts's `renderEditorShell` doc comment. It is a normal
+   scrolling document (`src/editor/editor.css`'s own header: "not the
+   1920x1080 stage"), so nothing here uses `--stage-unit`. Minimal, only
+   enough for legibility and the one back affordance — everything inside
+   `.editor-shell-body` is WL-C's own `src/editor/editor.css` territory. */
+.editor-shell {
+  position: relative;
+  /* `100%` would need `#app`/`body` to have an explicit (non-auto) height
+     to resolve against — measured live via screenshot: it does not, so a
+     short editor screen left `body`'s black letterbox colour (stage.css's
+     own `body { background: #000 }`, meant only for the 16:9 canvas'
+     surrounding bars) showing below the content. `100vh` does not depend
+     on an ancestor's resolved height at all — fixed, re-confirmed by
+     screenshot (verify-out/editor-shell-opened.png). */
+  min-block-size: 100vh;
+  background: #F2F4F7;
+  color: #0E1116;
+  font-family: 'Cairo', 'SF Arabic', 'Segoe UI', 'Noto Naskh Arabic', 'Noto Sans Arabic', Tahoma, 'Geeza Pro', sans-serif;
+}
+.editor-back-bar {
+  position: sticky;
+  inset-block-start: 0;
+  padding: 12px 16px;
+  background: #F2F4F7;
+  border-block-end: 1px solid #D8DCE3;
+}
+.editor-back-button {
+  min-inline-size: auto;
+  min-block-size: auto;
+  padding: 10px 20px;
+  font-size: 18px;
+  border-radius: 8px;
+  border-color: #0E1116;
+  color: #0E1116;
+}
+.editor-shell-body {
+  padding: 0 16px 32px;
 }

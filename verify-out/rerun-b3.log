@@ -1,0 +1,170 @@
+﻿{
+  "noCelebrationGrep": {
+    "file": "turn-handoff.ts",
+    "matches": []
+  },
+  "timerPercentGrep": {
+    "setIntervalHits": [],
+    "newDateHits": [],
+    "percentHits": [
+      {
+        "file": "screens\\ending.ts",
+        "count": 1
+      },
+      {
+        "file": "screens\\question-audio.ts",
+        "count": 4
+      },
+      {
+        "file": "session\\placeholder-media.ts",
+        "count": 6
+      }
+    ]
+  },
+  "literalStringAudit": [
+    {
+      "file": "screens/chrome.ts",
+      "literal": "يوجّه السؤال ← فريق",
+      "present": true
+    },
+    {
+      "file": "screens/turn-handoff.ts",
+      "literal": "وصل النهاية — وفريق",
+      "present": true
+    },
+    {
+      "file": "screens/turn-handoff.ts",
+      "literal": "له محاولة أخيرة",
+      "present": true
+    },
+    {
+      "file": "screens/turn-handoff.ts",
+      "literal": "سؤال الحسم",
+      "present": true
+    },
+    {
+      "file": "screens/maze-beat.ts",
+      "literal": "سؤال أخير من الحضور — أول فريق يجاوب صح يفوز",
+      "present": true
+    },
+    {
+      "file": "screens/maze-beat.ts",
+      "literal": "جاوب صح",
+      "present": true
+    },
+    {
+      "file": "screens/maze-beat.ts",
+      "literal": "نعلنها تعادل",
+      "present": true
+    },
+    {
+      "file": "screens/ending.ts",
+      "literal": "بالتقدّم — ",
+      "present": true
+    },
+    {
+      "file": "screens/ending.ts",
+      "literal": "نفس الفريقين — يبدأ فريق",
+      "present": true
+    },
+    {
+      "file": "screens/ending.ts",
+      "literal": "الأسئلة ترجع من أولها",
+      "present": true
+    },
+    {
+      "file": "screens/team-setup.ts",
+      "literal": "إذا وصلوا النهاية سوا → سؤال الحسم",
+      "present": true
+    },
+    {
+      "file": "screens/team-setup.ts",
+      "literal": "تكفي غالباً، وإذا كثرت الأخطاء ممكن تخلص الأسئلة قبل ما يوصل أحد",
+      "present": true
+    },
+    {
+      "file": "screens/team-setup.ts",
+      "literal": "تكفي لمسار",
+      "present": true
+    },
+    {
+      "file": "screens/maze-view.ts",
+      "literal": "البداية",
+      "present": true
+    },
+    {
+      "file": "screens/maze-view.ts",
+      "literal": "النهاية",
+      "present": true
+    }
+  ],
+  "deadEndStructure": {
+    "expectedStationCircles": 22,
+    "actualStationCircles": 22,
+    "deadEndCircleCount": 0,
+    "wallLineCount": 10,
+    "expectedWallLineCount": 10,
+    "stubPathCount": 5,
+    "expectedStubPathCount": 5,
+    "stationVsDeadEndCollisions": [],
+    "spineMonotonic": true
+  },
+  "deadEndMutation": {
+    "beforeCount": 1,
+    "afterCount": 0
+  },
+  "v13ControlSizes": {
+    "rects": [
+      {
+        "text": "لم يجيبوا",
+        "width": 240,
+        "height": 96,
+        "left": 96,
+        "right": 336
+      },
+      {
+        "text": "تراجُع",
+        "width": 240,
+        "height": 96,
+        "left": 192,
+        "right": 432
+      }
+    ],
+    "allMeetSize": true
+  },
+  "v13GapCheck": {
+    "count": 3,
+    "minGap": 32,
+    "allMeetSize": true,
+    "rects": [
+      {
+        "width": 293.21875,
+        "height": 96
+      },
+      {
+        "width": 664.640625,
+        "height": 96
+      },
+      {
+        "width": 609.6875,
+        "height": 96
+      }
+    ]
+  },
+  "v12Structural": {
+    "dashArrayA": "none",
+    "dashArrayB": "14px, 10px",
+    "dashDiffers": true,
+    "shapeA": "circle",
+    "shapeB": "rect",
+    "shapesDiffer": true,
+    "labelA": "الفريق الأزرق",
+    "labelB": "الفريق البرتقالي",
+    "labelsDiffer": true
+  },
+  "v12ScreenshotTaken": true,
+  "v24": {
+    "actions": 2,
+    "reachedQuestion": true
+  }
+}

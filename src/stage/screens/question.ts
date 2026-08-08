@@ -23,6 +23,34 @@ export interface QuestionScreenParams {
   onUndo: () => void;
   /** D-09.9 — this question is the decider ("سؤال الحسم"), styled distinctly. */
   isDecider?: boolean;
+  /**
+   * Resolves a question's media to a URL. Falls back to the demo resolver
+   * when absent (i.e. the caller passed no function at all) — this keeps
+   * every already-verified PH-B2/B3 demo-deck behaviour regressing to zero
+   * change. This is the injection seam `media-storage-expert` predicted
+   * ("the difference is exactly one function: `resolveMedia(id)`"): the
+   * editor's live preview passes the author's actual uploaded blob URL, a
+   * published pack's stage passes its own content-addressed resolver, and
+   * this dispatcher is the ONLY place in the stage that is allowed to know
+   * which one is active — the text/image/audio screen modules themselves
+   * never call `resolveDemoMediaUrl` directly.
+   *
+   * Returning `null` means "the function ran but genuinely found no media
+   * for this question" (e.g. a broken/incomplete pack) — this is treated
+   * as a real resolution failure, NOT silently patched over with demo
+   * content, so the empty-string URL is passed straight to `<img>`/`<audio>`,
+   * which reliably fires their existing `error` listener (verified directly:
+   * both elements fire `error`, never `load`, on an empty `src`) and shows
+   * the screen's own already-built "تعذّر عرض الصورة/تعذّر تشغيل المقطع"
+   * truthful-failure copy — never a mismatched demo placeholder standing in
+   * for a real author's missing media.
+   */
+  resolveMediaUrl?: (question: Question) => string | null;
+}
+
+function resolveQuestionMediaUrl(p: QuestionScreenParams): string {
+  if (!p.resolveMediaUrl) return resolveDemoMediaUrl(p.question.id);
+  return p.resolveMediaUrl(p.question) ?? '';
 }
 
 /**
@@ -42,12 +70,12 @@ export function renderQuestionScreen(container: HTMLElement, p: QuestionScreenPa
   if (kind === 'image') {
     renderImageQuestionScreen(container, {
       ...p,
-      imageUrl: resolveDemoMediaUrl(p.question.id),
+      imageUrl: resolveQuestionMediaUrl(p),
     });
   } else if (kind === 'audio') {
     renderAudioQuestionScreen(container, {
       ...p,
-      audioUrl: resolveDemoMediaUrl(p.question.id),
+      audioUrl: resolveQuestionMediaUrl(p),
     });
   } else {
     renderTextQuestionScreen(container, p);

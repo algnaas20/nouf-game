@@ -1,0 +1,299 @@
+{
+  "V1": {
+    "measured": {
+      "100": {
+        "question": "76px",
+        "option": "60px",
+        "option-letter": "48px",
+        "team-name": "44px",
+        "score": "72px",
+        "operator-button": "44px"
+      },
+      "115": {
+        "question": "87.4px",
+        "option": "69px",
+        "option-letter": "55.2px",
+        "team-name": "50.6px",
+        "score": "82.8px",
+        "operator-button": "50.6px"
+      },
+      "130": {
+        "question": "98.8px",
+        "option": "78px",
+        "option-letter": "62.4px",
+        "team-name": "57.2px",
+        "score": "93.6px",
+        "operator-button": "57.2px"
+      }
+    },
+    "expected": {
+      "100": {
+        "question": "76px",
+        "option": "60px",
+        "option-letter": "48px",
+        "team-name": "44px",
+        "score": "72px",
+        "operator-button": "44px"
+      },
+      "115": {
+        "question": "87.4px",
+        "option": "69px",
+        "option-letter": "55.2px",
+        "team-name": "50.6px",
+        "score": "82.8px",
+        "operator-button": "50.6px"
+      },
+      "130": {
+        "question": "98.8px",
+        "option": "78px",
+        "option-letter": "62.4px",
+        "team-name": "57.2px",
+        "score": "93.6px",
+        "operator-button": "57.2px"
+      }
+    },
+    "mismatches": [],
+    "allExact": true
+  },
+  "V2": {
+    "w600": {
+      "ascent": 50,
+      "descent": 0,
+      "r": 0.5
+    },
+    "w700": {
+      "ascent": 51,
+      "descent": 0,
+      "r": 0.51
+    },
+    "note": "record-only per addendum-v2-ruling.md §6 — expected band 0.45-0.55"
+  },
+  "V3": {
+    "pairs": {
+      "questionVsBg": 17.163328795650028,
+      "optionVsBg": 17.163328795650028,
+      "teamNameVsBg": 17.163328795650028,
+      "scoreVsBg": 17.163328795650028,
+      "turnHeaderVsBg": 17.163328795650028,
+      "deciderBadgeTextVsOwnBg": 7.095059663030005,
+      "primaryButtonTextVsFill": 17.163328795650028
+    },
+    "floor": 7,
+    "belowFloor": []
+  },
+  "V4": {
+    "100": {
+      "f1MaxOverflow": 0,
+      "f2MaxOverflow": 0,
+      "f2OverlapPx": -12.875
+    },
+    "115": {
+      "f1MaxOverflow": 0,
+      "f2MaxOverflow": 0,
+      "f2OverlapPx": -11.53125
+    },
+    "130": {
+      "f1MaxOverflow": 0,
+      "f2MaxOverflow": 0,
+      "f2OverlapPx": -10.703125
+    }
+  },
+  "V5": {
+    "hits": [],
+    "count": 0
+  },
+  "V6": {
+    "optionARect": {
+      "left": 976,
+      "right": 1824
+    },
+    "optionBRect": {
+      "left": 96,
+      "right": 944
+    },
+    "optionMirror": true,
+    "optionsColRect": {
+      "left": 96,
+      "right": 1132
+    },
+    "imageColRect": {
+      "left": 1164,
+      "right": 1824
+    },
+    "imageRightOfOptions": true
+  },
+  "V7": {
+    "font": "Cairo 700",
+    "sizePx": 60,
+    "inkPixels": 758,
+    "glyphBBox": {
+      "minX": 12,
+      "maxX": 56,
+      "minY": 69,
+      "maxY": 107
+    },
+    "blobCount": 4,
+    "blobs": [
+      [
+        1,
+        9
+      ],
+      [
+        13,
+        20
+      ],
+      [
+        24,
+        31
+      ],
+      [
+        36,
+        44
+      ]
+    ],
+    "dotGapPx": 4,
+    "note": "heuristic found 4 ink-column blobs in the top 45% band (not exactly 2) — isolated Arabic glyph shaping likely includes part of the tooth/connector stroke alongside the two dots at this simple column-scan resolution; dotGapPx uses the first two blobs left-to-right and should be read as approximate, not a clean per-dot measurement. Not chased further — V7 is record-only (font decision already closed, addendum-v2-ruling.md).",
+    "comparisonFont": "IBM Plex Sans Arabic",
+    "comparisonStatus": "N/A — font decision already closed (addendum-v2-ruling.md, V27/V28); IBM Plex Sans Arabic was never self-hosted for this product, so no A/B comparison was performed. Recorded Cairo-only for completeness per the plan's literal V7 line."
+  },
+  "V8": {
+    "activeFamily": "Cairo, \"SF Arabic\", \"Segoe UI\", \"Noto Naskh Arabic\", \"Noto Sans Arabic\", Tahoma, \"Geeza Pro\", sans-serif",
+    "maxTextBoxOverflow": 0,
+    "safeAreaOverflow": 0
+  },
+  "V9": {
+    "elementCount": 10,
+    "violations": [],
+    "violationCount": 0
+  },
+  "V10": {
+    "files": [
+      "styles\\stage.css",
+      "styles\\tokens.css"
+    ],
+    "allMatches": [],
+    "matchCount": 0
+  },
+  "V11": {
+    "landscape": {
+      "width": 660,
+      "height": 660,
+      "meetsFloor": true
+    },
+    "portrait": {
+      "width": 660,
+      "height": 660,
+      "meetsFloor": true
+    }
+  },
+  "V12": {
+    "dashArrayA": "none",
+    "dashArrayB": "14px, 10px",
+    "dashDiffers": true,
+    "shapeA": "circle",
+    "shapeB": "rect",
+    "shapesDiffer": true
+  },
+  "V13": {
+    "rects": [
+      {
+        "text": "ابدأ اللعبة",
+        "width": 242.09375,
+        "height": 96
+      },
+      {
+        "text": "أسئلتي",
+        "width": 240,
+        "height": 96
+      },
+      {
+        "text": "تراجُع",
+        "width": 240,
+        "height": 96
+      }
+    ],
+    "allMeetSize": true
+  },
+  "V14": {
+    "teamBShiftPx": 0,
+    "teamAAnchorShiftPx": 0,
+    "teamAOwnWidthGrowthPx": 40.03125,
+    "zeroShift": true,
+    "digitWidths": [
+      40.03199768066406,
+      40.03199768066406,
+      40.03199768066406,
+      40.03199768066406,
+      40.03199768066406,
+      40.03199768066406,
+      40.03199768066406,
+      40.03199768066406,
+      40.03199768066406,
+      40.03199768066406
+    ],
+    "allDigitsEqualWidth": true
+  },
+  "V20_V21": {
+    "rotations": 4,
+    "allStylesIdentical": true,
+    "allHeightsEqual": true,
+    "allLeaksEmpty": true
+  },
+  "V22": {
+    "stateLabel": "تعذّر تشغيل المقطع. تابعوا بالسؤال نصّياً.",
+    "allFlat": true,
+    "expected": "تعذّر تشغيل المقطع. تابعوا بالسؤال نصّياً.",
+    "truthful": true
+  },
+  "V23": {
+    "status": "N/A_TO_WL-B",
+    "reason": "Backup-chip contrast is the editor draft-backup badge (src/editor/ui/backup-badge.ts, WL-C-owned). Not stage territory — cannot be built or measured from src/stage/**."
+  },
+  "V24": {
+    "actions": 2,
+    "reachedQuestion": true
+  },
+  "V25": {
+    "status": "N/A_TO_WL-B",
+    "reason": "Emitted backup filename is the published pack's ZIP writer output (src/pack/**, WL-D-owned; PH-D2, not yet built). Not stage territory."
+  },
+  "V26": {
+    "rawHits": [
+      "editor\\ui\\question-form.ts",
+      "media\\audio.ts"
+    ],
+    "rawCount": 2,
+    "justified": {
+      "editor\\ui\\question-form.ts": "accept-attribute string `audio/mpeg,audio/mp4,...` — `audio/mp4` is M4A audio's real IANA media type, not a video affordance",
+      "editor/ui/question-form.ts": "accept-attribute string `audio/mpeg,audio/mp4,...` — `audio/mp4` is M4A audio's real IANA media type, not a video affordance",
+      "media\\audio.ts": "`M4A_MIME_TYPES`/`extForAudioFormat` — `audio/mp4` is M4A audio's real IANA media type, not a video affordance",
+      "media/audio.ts": "`M4A_MIME_TYPES`/`extForAudioFormat` — `audio/mp4` is M4A audio's real IANA media type, not a video affordance"
+    },
+    "acceptedViolationCount": 0,
+    "unjustified": []
+  },
+  "V27_V28": {
+    "fontWeight600": "600",
+    "fontWeight700": "700",
+    "fontSynthesisOnRoot": "none",
+    "inkWidthDiffers": true,
+    "width600": 100.29998779296875,
+    "width700": 110,
+    "digitFamily": "Cairo, \"SF Arabic\", \"Segoe UI\", \"Noto Naskh Arabic\", \"Noto Sans Arabic\", Tahoma, \"Geeza Pro\", sans-serif",
+    "arabicFamily": "Cairo, \"SF Arabic\", \"Segoe UI\", \"Noto Naskh Arabic\", \"Noto Sans Arabic\", Tahoma, \"Geeza Pro\", sans-serif",
+    "sameFamily": true,
+    "hasDigitGlyphs": true
+  },
+  "fontBudget": {
+    "files": [
+      {
+        "file": "cairo-arabic.woff2",
+        "bytes": 36340
+      }
+    ],
+    "totalBytes": 36340,
+    "totalKB": 35.49,
+    "ceilingKB": 120,
+    "withinBudget": true
+  }
+}
