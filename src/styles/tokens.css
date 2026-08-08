@@ -41,6 +41,18 @@
   /* Safe area, §1.7 — 5% overscan inset. Layout-fixed: does NOT scale with --scale-step. */
   --safe-inline: 96;
   --safe-block: 54;
+
+  /* Combined question+options fit (fit-combined.ts) — 1 by default; only
+     ever set on `.options-grid` inline, closer to the floor, when the
+     worst-case combined fixture would otherwise collide with the question
+     box (worklog-B1.md §V4b). */
+  --option-shrink: 1;
+  --option-gap-scale: 1;
+  /* Phase-3 last resort (fit-combined.ts) — only ever lowered on the
+     pathological combined-worst-case fixture where option-shrink and
+     option-gap-scale alone still are not enough (worklog-B2.md §6). */
+  --safe-gap-scale: 1;
+  --turn-header-shrink: 1;
 }
 
 :root[data-scale='100'] { --scale-step: 1; }
