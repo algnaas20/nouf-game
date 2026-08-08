@@ -18,17 +18,30 @@ interface Rule {
 
 // Each rule matches the *start* of a URL/import target, right after the
 // opening quote/paren, so "./assets/x.js" (a dot, not a slash) never matches.
+//
+// Quote class includes the backtick (`` ` ``): PH-D3 discovered a real,
+// previously-blind gap here — esbuild's minifier (used by this project's
+// own `vite build`) rewrites plain single/double-quoted string literals
+// with no interpolation into template-literal (backtick) strings as part
+// of its normal minification, e.g. `register('/sw.js')` came out of a real
+// build as `` register(`/sw.js`) ``. The double-quote-only pattern this gate
+// shipped with in PH-D1 silently passed that violation. Discovered via a
+// deliberate red→green mutation while building PH-D3 (see worklog-D3.md);
+// fixed here rather than worked around in the one call site that happened
+// to trip it, since every other `register(...)`/`fetch(...)`/etc. call in
+// the codebase is equally exposed to the same minifier behaviour.
+const QUOTE = '["\'`]';
 const RULES: Rule[] = [
-  { name: 'src="/', re: /\b(?:src|href)\s*=\s*(["'])\/(?!\/)/g },
-  { name: 'url(/', re: /\burl\(\s*(["']?)\/(?!\/)/g },
-  { name: 'from "/', re: /\bfrom\s*(["'])\/(?!\/)/g },
-  { name: 'import("/', re: /\bimport\(\s*(["'])\/(?!\/)/g },
-  { name: 'fetch("/', re: /\bfetch\(\s*(["'])\/(?!\/)/g },
-  { name: 'register("/', re: /\bregister\(\s*(["'])\/(?!\/)/g },
+  { name: 'src="/', re: new RegExp(`\\b(?:src|href)\\s*=\\s*(${QUOTE})/(?!/)`, 'g') },
+  { name: 'url(/', re: new RegExp(`\\burl\\(\\s*(${QUOTE}?)/(?!/)`, 'g') },
+  { name: 'from "/', re: new RegExp(`\\bfrom\\s*(${QUOTE})/(?!/)`, 'g') },
+  { name: 'import("/', re: new RegExp(`\\bimport\\(\\s*(${QUOTE})/(?!/)`, 'g') },
+  { name: 'fetch("/', re: new RegExp(`\\bfetch\\(\\s*(${QUOTE})/(?!/)`, 'g') },
+  { name: 'register("/', re: new RegExp(`\\bregister\\(\\s*(${QUOTE})/(?!/)`, 'g') },
   // Protocol-relative "//host/..." — a quote/paren directly followed by two
   // slashes then a non-slash char. Deliberately does NOT match "https://..."
   // (the character right after the quote there is 'h', not '/').
-  { name: 'protocol-relative //', re: /(["'(])\/\/[^/]/g },
+  { name: 'protocol-relative //', re: new RegExp(`([${QUOTE.slice(1, -1)}(])//[^/]`, 'g') },
 ];
 
 function lineAndColOf(text: string, index: number): { line: number; col: number } {

@@ -107,7 +107,30 @@ function main(): void {
   console.log(`[proof] removed _helper.js; total violations now: ${restored3.totalViolations} (expected 0)`);
   if (restored3.totalViolations !== 0) throw new Error('failed to restore green state after mutation 3');
 
-  section('ALL THREE RED->GREEN PROOFS PASSED, STATE RESTORED');
+  // --- Mutation 4: gate 4a — a BACKTICK-quoted absolute path (PH-D3 find) ---
+  // Discovered for real while building PH-D3: esbuild's minifier rewrites
+  // plain-quoted string literals with no interpolation into template-
+  // literal (backtick) strings, e.g. a source `register('/sw.js')` came out
+  // of a genuine `vite build` as `` register(`/sw.js`) `` — which the
+  // original RULES (double/single quote only) silently passed. Fixed in
+  // leading-slash-scan.ts (the QUOTE character class now includes `` ` ``);
+  // this mutation keeps that fix honest on every future run, the same way
+  // mutations 1-3 keep the original three gates honest.
+  section('MUTATION 4 (gate 4a) — backtick-quoted absolute path in an emitted .js file');
+  const backtickJsPath = join(DIST, 'assets', 'zz-backtick-test.js');
+  writeFileSync(backtickJsPath, 'navigator.serviceWorker.register(`/sw.js`);\n', 'utf8');
+  const mutated4 = runAllGates(DIST);
+  const gate4aBacktick = mutated4.outcomes.find((o) => o.gate === '4a-leading-slash')!;
+  console.log(`[proof] 4a violations: ${gate4aBacktick.violations.length} (expected > 0)`);
+  if (gate4aBacktick.violations.length === 0) {
+    throw new Error('gate 4a did NOT catch a backtick-quoted absolute path — blind guard');
+  }
+  rmSync(backtickJsPath, { force: true });
+  const restored4 = runAllGates(DIST);
+  console.log(`[proof] removed zz-backtick-test.js; total violations now: ${restored4.totalViolations} (expected 0)`);
+  if (restored4.totalViolations !== 0) throw new Error('failed to restore green state after mutation 4');
+
+  section('ALL FOUR RED->GREEN PROOFS PASSED, STATE RESTORED');
 }
 
 main();

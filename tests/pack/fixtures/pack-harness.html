@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Pack test harness — WL-D PH-D2</title>
+  </head>
+  <body>
+    <!--
+      Test-only harness — NOT part of the shipped app, exactly like WL-C's
+      tests/editor/fixtures/editor-harness.html. Exists solely so PH-D2's
+      D2-7 acceptance criterion (a real round trip through a real
+      IndexedDB, with a real wipe) can be proven against an actual browser
+      via Playwright (tests/pack/live/pack-roundtrip.ts).
+    -->
+    <input type="file" id="import-file-input" style="display: none" accept=".zip" />
+    <div id="status">not started</div>
+    <script type="module">
+      import { createIdbBackend } from '../../../src/storage/idb';
+      import { DraftStore } from '../../../src/editor/draft-store';
+      import {
+        addFixtureQuestions,
+        triggerRealBackupDownload,
+        importFileIntoStore,
+        buildAndExportForInspection,
+      } from '../live/browser-fixtures';
+
+      // Headless/automated Chromium exposes `showSaveFilePicker` as a real
+      // function (confirmed by direct probing — it is present on an
+      // http(s)-served page, absent on data:/about:blank), but calling it
+      // here has no real user present to drive the native OS Save dialog,
+      // and Chromium's automation surface rejects it near-instantly with
+      // `AbortError` rather than hanging — which `writeBlobToDevice`
+      // correctly treats as "the user cancelled" and returns `null` for.
+      // That is *our* code behaving exactly as designed for a real cancel;
+      // it just means this harness cannot exercise the Save-picker branch
+      // at all (no test tool can drive a native OS dialog headlessly).
+      // Deleting it here forces the universal `<a download>` fallback path
+      // — the one this test actually needs to prove for real, since it is
+      // the path every non-Chromium/Edge host, and this automated test,
+      // actually uses.
+      delete window.showSaveFilePicker;
+
+      // A fresh DraftStore over the REAL IndexedDB-backed backend — nothing
+      // faked here, this is exactly what the shipped editor uses.
+      const store = new DraftStore({ backend: createIdbBackend() });
+      window.__store = store;
+      window.__ready = store.load().then(() => {
+        document.getElementById('status').textContent = 'ready';
+      });
+
+      window.__addFixtureQuestions = (count) => addFixtureQuestions(store, count);
+      window.__triggerRealBackupDownload = (title) => triggerRealBackupDownload(store, title);
+      window.__buildAndExportForInspection = (title) => buildAndExportForInspection(store, title);
+
+      window.__importFileFromInput = async () => {
+        const input = document.getElementById('import-file-input');
+        const file = input.files[0];
+        if (!file) throw new Error('no file selected');
+        return importFileIntoStore(store, file);
+      };
+
+      window.__questionCount = () => store.getState().questions.length;
+      window.__wipeDatabase = () =>
+        new Promise((resolve, reject) => {
+          const req = indexedDB.deleteDatabase('nouf-editor-draft');
+          req.onsuccess = () => resolve(true);
+          req.onerror = () => reject(req.error);
+          req.onblocked = () => resolve('blocked'); // surfaced to Node, not silently ignored
+        });
+    </script>
+  </body>
+</html>

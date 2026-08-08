@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "rehearsal": "tsx scripts/serve-subpath.ts"
+    "rehearsal": "tsx scripts/serve-subpath.ts",
+    "verify-pwa": "tsx scripts/pwa/verify-pwa.ts"
   },
   "devDependencies": {
     "@types/node": "^26.2.0",
