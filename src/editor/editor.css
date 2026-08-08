@@ -28,3 +28,73 @@
   color: #d55e00;
   font-weight: 700;
 }
+
+/* PH-C2 — media attach/preview. Purely presentational; no acceptance
+   criterion depends on these exact values, kept small and simple. */
+.media-attach-thumb,
+.question-media-thumb {
+  max-width: 96px;
+  max-height: 96px;
+  object-fit: cover;
+}
+
+.media-attach-error {
+  color: #d55e00;
+}
+
+.media-size-counter {
+  font-variant-numeric: tabular-nums;
+}
+
+/* PH-C3 — readiness meter, media-batch warning, backup badge, stage
+   preview overlay. Purely presentational; no AC depends on exact values
+   beyond what the JS-driven text/attributes already prove. */
+.readiness-meter {
+  font-weight: 700;
+}
+.readiness-meter.band-green {
+  color: #009e73;
+}
+.readiness-meter.band-warn {
+  color: #b8860b;
+}
+.readiness-meter.band-refuse {
+  color: #d55e00;
+}
+
+.media-batch-warning {
+  color: #b8860b;
+  font-weight: 600;
+}
+
+.backup-badge.state-draft-only {
+  color: #6b7280;
+}
+.backup-badge.state-saved,
+.backup-badge.state-published {
+  color: #009e73;
+  font-weight: 700;
+}
+
+.session-end-reminder {
+  border-inline-start: calc(4px) solid #d55e00;
+  padding-inline-start: 8px;
+}
+
+/* The stage preview is a full-viewport overlay (see stage-preview.ts for
+   why it cannot be a shrunk inline widget — --stage-unit is viewport-
+   relative, defined in WL-B's src/styles/tokens.css, which this module
+   imports but never redefines). */
+.stage-preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: #000;
+}
+
+.stage-preview-close-button {
+  position: fixed;
+  inset-block-start: 16px;
+  inset-inline-end: 16px;
+  z-index: 1001;
+}

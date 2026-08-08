@@ -40,10 +40,48 @@
           }
           return realBackend.putQuestion(question);
         },
+        // PH-C2 — draft-store now writes new/edited questions through
+        // putQuestionWithMedia (one transaction, question + optional media
+        // blob together), so the AC2 simulated-quota-error hook has to
+        // intercept this path too, or a real write would sail through
+        // unintercepted and AC2's live scenario would silently stop proving
+        // anything.
+        async putQuestionWithMedia(question, media) {
+          if (forceNextPutQuotaError) {
+            forceNextPutQuotaError = false;
+            throw new DOMException('simulated for PH-C1 AC2', 'QuotaExceededError');
+          }
+          return realBackend.putQuestionWithMedia(question, media);
+        },
       };
 
       const store = new DraftStore({ backend: testBackend });
-      mountEditor(document.getElementById('app'), { store });
+      // PH-C3 — exposed for live scripts to drive the real store directly
+      // (e.g. `recordPublish()`, or adding many questions fast without
+      // typing through the form UI for AC6's 101-question threshold test).
+      // Test-only; never referenced by app code.
+      window.__store = store;
+
+      // PH-C3 — a controllable stand-in for the real (not-yet-built) ZIP
+      // writer's completion callback. A live script calls
+      // `window.__setNextBackupFilename('some.zip')`, then clicks whichever
+      // «احفظ نسخة» button is on screen (storage-full banner or the T1
+      // reminder) — `mountEditor`'s own `triggerBackup` awaits this and, on
+      // a real filename, calls `store.recordBackup(filename)`. This proves
+      // the boundary crossing for real, without building any ZIP logic.
+      let pendingBackupFilename = null;
+      window.__setNextBackupFilename = (filename) => {
+        pendingBackupFilename = filename;
+      };
+      mountEditor(document.getElementById('app'), {
+        store,
+        onRequestBackup: async () => {
+          if (pendingBackupFilename === null) return null;
+          const filename = pendingBackupFilename;
+          pendingBackupFilename = null;
+          return { filename };
+        },
+      });
     </script>
   </body>
 </html>
