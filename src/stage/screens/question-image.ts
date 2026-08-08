@@ -147,7 +147,18 @@ export function renderImageQuestionScreen(container: HTMLElement, p: ImageQuesti
     qText.textContent = p.question.text;
     imageCol.append(imgBox, qText);
 
-    beat2.append(optionsCol, imageCol);
+    // V6 (PH-B4): stage-ux-investigation.md §6.2's wireframe is explicit —
+    // "the image column sits on the inline-start (right)". `.image-beat2`'s
+    // grid columns are numbered from the container's start edge (the RIGHT
+    // under dir="rtl"), and items are auto-placed into them by DOM order —
+    // so the image column must be appended FIRST to land in the rightmost
+    // (start) column, matching `grid-template-columns: auto 1fr` below
+    // (auto = the fixed 660px image box, 1fr = the flexible options list).
+    // A real, measured defect this exact order was reversed (options
+    // first): V6 caught `imageRightOfOptions: false` against the shipped
+    // `optionsCol, imageCol` order + `1fr auto` columns — disclosed and
+    // fixed here, not just reported, since this file is WL-B-owned.
+    beat2.append(imageCol, optionsCol);
     safe.append(beat2);
 
     if (p.revealed) {

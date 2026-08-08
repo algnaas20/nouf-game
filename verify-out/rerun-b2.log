@@ -1,0 +1,123 @@
+﻿{
+  "noTell": {
+    "preReveal_notDisabled": {
+      "allIdentical": true,
+      "heights": [
+        136,
+        136,
+        136,
+        136
+      ],
+      "heightsEqual": true,
+      "leaks": []
+    },
+    "preReveal_disabled_audioConcealed": {
+      "allIdentical": true,
+      "heights": [
+        136,
+        136,
+        136,
+        136
+      ],
+      "heightsEqual": true,
+      "leaks": []
+    }
+  },
+  "noTellMutation": {
+    "leaksBefore": [
+      "data-correct"
+    ],
+    "leaksAfter": []
+  },
+  "combinedOverlap": {
+    "100": {
+      "overlapPx": -12.875
+    },
+    "115": {
+      "overlapPx": -11.53125
+    },
+    "130": {
+      "overlapPx": -10.703125
+    }
+  },
+  "overlapMutation": {
+    "before": 236.625,
+    "after": -10.703125,
+    "reportedFinalOverlapPx": -10.703125,
+    "optionShrink": 0.7333333333333338,
+    "gapScale": 0.5,
+    "questionLines": 1
+  },
+  "imageFloor": {
+    "landscape": {
+      "width": 660,
+      "height": 660,
+      "meetsFloor": true
+    },
+    "portrait": {
+      "width": 660,
+      "height": 660,
+      "meetsFloor": true
+    }
+  },
+  "audioTruthfulness": {
+    "stateLabel": "تعذّر تشغيل المقطع. تابعوا بالسؤال نصّياً.",
+    "allFlat": true,
+    "barHeights": [
+      "0%",
+      "0%",
+      "0%",
+      "0%",
+      "0%"
+    ]
+  },
+  "mediaAttrs": {
+    "imgLoading": "lazy",
+    "audioPreload": "none"
+  },
+  "v1Recheck": {
+    "question": "76px",
+    "option": "60px",
+    "option-letter": "48px",
+    "team-name": "44px",
+    "score": "72px"
+  },
+  "v3Recheck": {
+    "turnHeaderVsBg": 17.163328795650028,
+    "deciderBadgeTextVsOwnBg": 7.095059663030005
+  },
+  "v10Recheck": {
+    "matchCount": 0,
+    "matches": []
+  },
+  "v26VideoGrep": {
+    "hits": [
+      "C:\\Users\\Az202\\Desktop\\projects\\nouf-wl-b-stage\\src\\editor\\ui\\question-form.ts",
+      "C:\\Users\\Az202\\Desktop\\projects\\nouf-wl-b-stage\\src\\media\\audio.ts"
+    ]
+  },
+  "v27v28": {
+    "fontWeight600": "600",
+    "fontWeight700": "700",
+    "fontSynthesisOnRoot": "none",
+    "inkWidthDiffers": true,
+    "width600": 100.29998779296875,
+    "width700": 110,
+    "digitFamily": "Cairo, \"SF Arabic\", \"Segoe UI\", \"Noto Naskh Arabic\", \"Noto Sans Arabic\", Tahoma, \"Geeza Pro\", sans-serif",
+    "arabicFamily": "Cairo, \"SF Arabic\", \"Segoe UI\", \"Noto Naskh Arabic\", \"Noto Sans Arabic\", Tahoma, \"Geeza Pro\", sans-serif",
+    "sameFamily": true,
+    "hasDigitGlyphs": true
+  },
+  "v2Revised": {
+    "w600": {
+      "ascent": 50,
+      "descent": 0,
+      "r": 0.5
+    },
+    "w700": {
+      "ascent": 51,
+      "descent": 0,
+      "r": 0.51
+    }
+  }
+}
