@@ -9,9 +9,17 @@
 @font-face {
   font-family: 'Cairo';
   /* Measured: this single file is a variable font, wght axis 200-1000,
-     already covering 600 and 700 (see worklog-B1.md §0). */
+     already covering 600 and 700 (see worklog-B1.md §0), re-subset in PH-B2
+     to also include Western digits and basic Latin punctuation (V28 — the
+     shipped B1 subset lacked them; see worklog-B2.md §0). */
   src: url('../assets/fonts/cairo-arabic.woff2') format('woff2-variations'),
        url('../assets/fonts/cairo-arabic.woff2') format('woff2');
+  /* V27: the declared range must span the full instanced axis (200-1000),
+     never a single value — a single-value declaration on a variable file
+     makes the browser CLAMP to that value and SYNTHESIZE every other
+     requested weight by smearing the outline, fattening strokes and
+     closing the Arabic dot gaps that weight 600/700 was chosen to protect
+     (addendum-v2-ruling.md §6, trap F1). */
   font-weight: 200 1000;
   font-style: normal;
   font-display: block;
@@ -32,6 +40,11 @@ body {
 
 .stage-root {
   font-family: 'Cairo', 'SF Arabic', 'Segoe UI', 'Noto Naskh Arabic', 'Noto Sans Arabic', Tahoma, 'Geeza Pro', sans-serif;
+  /* V27 / trap F2: a missing weight instance must fail VISIBLY (fall back
+     to the nearest real instance the browser has, or to the next font in
+     the stack) rather than being silently faked by synthetic bold/oblique,
+     which would defeat the whole reason 600/700 were chosen. */
+  font-synthesis: none;
   position: fixed;
   /* `inset: 0` + `margin: auto` centers a fixed-size box regardless of
      direction, with no transform and no direction-sensitive left/right —
@@ -60,7 +73,9 @@ body {
   inset-inline-end: calc(var(--safe-inline) * var(--stage-unit));
   display: flex;
   flex-direction: column;
-  gap: calc(24 * var(--stage-unit));
+  /* `--safe-gap-scale` — fit-combined.ts's Phase-3 last resort. 1 (no-op)
+     unless the combined worst-case fixture needed every lever. */
+  gap: calc(24 * var(--stage-unit) * var(--safe-gap-scale));
 }
 
 /* ---- Typography roles, §1.5 — exact base sizes, line-heights, zero tracking. ---- */
@@ -82,13 +97,16 @@ body {
   text-align: start;
 }
 .type-option {
-  font-size: calc(var(--size-option) * var(--stage-unit) * var(--scale-step));
+  /* `--option-shrink` (fit-combined.ts) defaults to 1 — a no-op multiplier
+     everywhere except the worst-case combined fixture, where it is set,
+     scoped to `.options-grid`, down toward the 44/60 floor ratio. */
+  font-size: calc(var(--size-option) * var(--stage-unit) * var(--scale-step) * var(--option-shrink));
   font-weight: 600;
   line-height: 1.5;
   text-align: start;
 }
 .type-option-letter {
-  font-size: calc(var(--size-option-letter) * var(--stage-unit) * var(--scale-step));
+  font-size: calc(var(--size-option-letter) * var(--stage-unit) * var(--scale-step) * var(--option-shrink));
   font-weight: 700;
   line-height: 1;
 }
@@ -178,7 +196,10 @@ body {
   flex: 0 0 auto;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: calc(32 * var(--stage-unit));
+  /* `--option-gap-scale` (fit-combined.ts) — last-resort compression, 1 by
+     default, only lowered on the worst-case combined fixture after the
+     option-font shrink alone was not enough. */
+  gap: calc(32 * var(--stage-unit) * var(--option-gap-scale));
 }
 .options-grid.stacked {
   grid-template-columns: 1fr;
@@ -190,7 +211,7 @@ body {
   align-items: center;
   gap: calc(16 * var(--stage-unit));
   min-block-size: calc(120 * var(--stage-unit));
-  padding-block: calc(20 * var(--stage-unit));
+  padding-block: calc(20 * var(--stage-unit) * var(--option-gap-scale));
   padding-inline: calc(28 * var(--stage-unit));
   border-radius: calc(16 * var(--stage-unit));
   border: calc(3 * var(--stage-unit)) solid #2A2F38;
@@ -289,4 +310,379 @@ body {
   justify-content: center;
   gap: calc(48 * var(--stage-unit));
   text-align: center;
+}
+
+/* ---- Reduced motion — honoured globally, not per-component. ---- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* ---- LTR isolation for media timelines (S4/S5 exception, §2.5/§6.3). ---- */
+.ltr-isolate {
+  unicode-bidi: isolate;
+  direction: ltr;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Result banner (chrome.ts's buildResultBanner). ---- */
+.result-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(20 * var(--stage-unit));
+  border-radius: calc(16 * var(--stage-unit));
+  padding: calc(16 * var(--stage-unit)) calc(32 * var(--stage-unit));
+  border-width: calc(4 * var(--stage-unit));
+  border-style: solid;
+}
+.result-banner.is-correct { border-color: var(--color-correct); }
+.result-banner.is-wrong { border-color: var(--color-wrong); }
+
+/* ---- Turn header — the permanent strip Ruling 1 requires for the whole
+   life of a question (smaller than the handoff overlay's own text). ---- */
+.turn-header {
+  flex: 0 0 auto;
+  margin: 0;
+  /* `--turn-header-shrink` — fit-combined.ts's Phase-3 last resort. */
+  font-size: calc(32 * var(--stage-unit) * var(--scale-step) * var(--turn-header-shrink));
+  opacity: 0.85;
+}
+
+/* ---- Decider badge (D-09.9 — a different colour on the decider question). ---- */
+.decider-badge {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  background: #4A3300;
+  color: #F0C24A;
+  border-radius: calc(10 * var(--stage-unit));
+  padding: calc(6 * var(--stage-unit)) calc(20 * var(--stage-unit));
+  margin: 0;
+}
+
+/* ---- Option-card disabled state (audio's hidden-until-ended phase) —
+   applied identically to all four cards, so it carries no correctness
+   information (§4.9: uniform treatment, never a per-card difference). ---- */
+.option-card:disabled {
+  cursor: default;
+}
+.options-grid.concealed {
+  position: relative;
+}
+.options-grid.concealed .option-card {
+  visibility: hidden;
+}
+.options-grid.concealed::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: calc(16 * var(--stage-unit));
+  background: rgba(23, 27, 34, 0.4);
+}
+
+/* ================= Image question (Skeleton B, §6.2) ================= */
+
+.image-beat1-area {
+  position: relative;
+  flex: 1 1 auto;
+  min-block-size: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: calc(16 * var(--stage-unit));
+}
+.image-beat1-img {
+  max-inline-size: 100%;
+  max-block-size: 100%;
+  object-fit: contain;
+}
+.image-question-overlay {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+  background: var(--color-bg);
+  padding: calc(24 * var(--stage-unit)) calc(32 * var(--stage-unit));
+}
+.image-question-overlay .type-question {
+  margin: 0;
+}
+.media-error {
+  text-align: center;
+}
+
+.image-beat2 {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: calc(32 * var(--stage-unit));
+  align-items: start;
+}
+.image-beat2-options {
+  min-block-size: 0;
+  display: flex;
+  align-items: center;
+}
+.image-beat2-options .options-grid {
+  inline-size: 100%;
+}
+.image-beat2-image-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(16 * var(--stage-unit));
+}
+.image-beat2-image-box {
+  /* Floor 620x620 (V11) — fixed well above it; this design's single
+     1920x1080 scaled canvas means the floor holds by construction, not by
+     a runtime fallback (see question-image.ts's header comment). */
+  inline-size: calc(660 * var(--stage-unit));
+  block-size: calc(660 * var(--stage-unit));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: calc(16 * var(--stage-unit));
+  background: #171B22;
+}
+.image-beat2-img {
+  max-inline-size: 100%;
+  max-block-size: 100%;
+  object-fit: contain;
+}
+.image-beat2-question-text {
+  text-align: center;
+  margin: 0;
+}
+
+/* ================= Audio question (Skeleton C, §6.3) ================= */
+
+.audio-question-text {
+  flex: 0 0 auto;
+  margin: 0;
+}
+.audio-area {
+  flex: 1 1 auto;
+  min-block-size: calc(200 * var(--stage-unit));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(16 * var(--stage-unit));
+}
+.audio-level-meter {
+  inline-size: 100%;
+  block-size: calc(200 * var(--stage-unit));
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: calc(6 * var(--stage-unit));
+  padding: calc(12 * var(--stage-unit));
+}
+.audio-level-bar {
+  inline-size: calc(18 * var(--stage-unit));
+  block-size: 4%;
+  background: var(--color-team-a);
+  border-radius: calc(4 * var(--stage-unit));
+}
+.type-audio-state {
+  font-size: calc(var(--size-turn-banner) * var(--stage-unit) * var(--scale-step));
+  font-weight: 700;
+  margin: 0;
+}
+.audio-time {
+  font-size: calc(var(--size-score) * var(--stage-unit) * var(--scale-step) * 0.5);
+}
+.audio-play-button {
+  min-inline-size: calc(320 * var(--stage-unit));
+}
+
+/* ================= Turn hand-off overlay (Ruling 1) ================= */
+
+.turn-handoff-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(96 * var(--stage-unit));
+  background: var(--color-bg);
+  cursor: pointer;
+}
+.turn-handoff-overlay .type-turn-banner {
+  font-size: calc(72 * var(--stage-unit) * var(--scale-step));
+  text-align: center;
+  margin: 0;
+}
+.turn-handoff-balancing .type-turn-banner {
+  color: var(--color-team-b);
+}
+.turn-handoff-tiebreak {
+  background: #4A3300;
+}
+.turn-handoff-tiebreak .type-turn-banner {
+  color: #F0C24A;
+}
+
+/* ================= Maze beat (§6.4) ================= */
+
+.maze-beat-safe {
+  align-items: stretch;
+}
+.maze-step-cards {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: space-between;
+  gap: calc(32 * var(--stage-unit));
+}
+.maze-step-card {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(4 * var(--stage-unit));
+  padding: calc(12 * var(--stage-unit)) calc(20 * var(--stage-unit));
+  border-radius: calc(12 * var(--stage-unit));
+  border-width: calc(2 * var(--stage-unit));
+  border-style: solid;
+}
+.maze-step-card-a { border-color: var(--color-team-a); }
+.maze-step-card-b { border-color: var(--color-team-b); }
+.maze-step-of { font-variant-numeric: tabular-nums; }
+.maze-step-remaining { opacity: 0.85; }
+
+.maze-wrap {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.maze-svg {
+  inline-size: 100%;
+  block-size: 100%;
+}
+.maze-lane {
+  fill: none;
+  stroke-width: 5;
+}
+.maze-lane-a { stroke: var(--color-team-a); }
+.maze-lane-b { stroke: var(--color-team-b); stroke-dasharray: 14 10; }
+.maze-station { fill: #2A2F38; stroke: var(--color-text); stroke-width: 1; opacity: 0.7; }
+.maze-station-a { stroke: var(--color-team-a); }
+.maze-station-b { stroke: var(--color-team-b); }
+.maze-dead-end-stub { stroke: #3A4150; stroke-width: 6; fill: none; }
+.maze-dead-end-wall { stroke: var(--color-text); stroke-width: 5; opacity: 0.6; }
+.maze-marker-label {
+  fill: var(--color-text);
+  font-family: 'Cairo', sans-serif;
+  font-weight: 700;
+  font-size: 26px;
+}
+.maze-finish-flag { fill: var(--color-correct); stroke: var(--color-correct); }
+.maze-token {
+  transition: transform 600ms ease;
+}
+.maze-token-shape {
+  fill: #171B22;
+  stroke-width: 4;
+}
+.maze-token-a .maze-token-shape { stroke: var(--color-team-a); }
+.maze-token-b .maze-token-shape { stroke: var(--color-team-b); }
+.maze-token-label {
+  fill: var(--color-text);
+  font-family: 'Cairo', sans-serif;
+  font-weight: 700;
+  font-size: 22px;
+}
+
+.audience-decision-panel {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(32 * var(--stage-unit));
+  text-align: center;
+}
+.audience-decision-buttons {
+  display: flex;
+  gap: calc(32 * var(--stage-unit));
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.audience-draw-button {
+  opacity: 0.8;
+}
+
+/* ================= Ending screens (D-09.7…D-09.16) ================= */
+
+.ending-screen {
+  position: relative;
+}
+.ending-score-line {
+  block-size: auto;
+  gap: calc(64 * var(--stage-unit));
+}
+.rematch-info {
+  margin: 0;
+  opacity: 0.85;
+}
+.new-game-button {
+  min-inline-size: calc(420 * var(--stage-unit));
+}
+.confetti-flourish {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.confetti-bit {
+  position: absolute;
+  inline-size: calc(14 * var(--stage-unit));
+  block-size: calc(14 * var(--stage-unit));
+  inset-block-start: -20px;
+  inset-inline-start: calc(var(--i) * 4.2%);
+  border-radius: 3px;
+  animation: confetti-fall 2400ms ease-in forwards;
+  animation-delay: calc(var(--i) * 60ms);
+}
+.confetti-bit-0 { background: var(--color-team-a); }
+.confetti-bit-1 { background: var(--color-team-b); }
+.confetti-bit-2 { background: var(--color-correct); }
+.confetti-bit-3 { background: var(--color-text); }
+@keyframes confetti-fall {
+  to { transform: translateY(80vh) rotate(360deg); opacity: 0.2; }
+}
+
+/* ================= Team setup ================= */
+
+.team-setup-screen {
+  gap: calc(24 * var(--stage-unit));
+}
+.team-name-input {
+  inline-size: calc(600 * var(--stage-unit));
+  background: #171B22;
+  color: var(--color-text);
+  border: calc(2 * var(--stage-unit)) solid #2A2F38;
+  border-radius: calc(12 * var(--stage-unit));
+  padding: calc(12 * var(--stage-unit)) calc(20 * var(--stage-unit));
+  text-align: center;
+  font-family: inherit;
+}
+.track-presets-row {
+  display: flex;
+  gap: calc(24 * var(--stage-unit));
+}
+.track-preset-button.is-selected {
+  background: var(--color-text);
+  color: var(--color-bg);
+}
+.deck-band-line, .decider-announce-line {
+  margin: 0;
+  opacity: 0.85;
+  max-inline-size: calc(1000 * var(--stage-unit));
 }

@@ -16,36 +16,67 @@ export interface FitTextOptions {
   nominalPx: number;
   floorPx: number;
   lineHeight: number;
+  /**
+   * Hard cap on how many lines the box may grow to — PH-B2's fix for
+   * worklog-B1.md §V4b: growing "as many lines as it takes" with no
+   * awareness of how much room the surrounding flex layout actually has
+   * left is exactly what produced the collision (the box grew to whatever
+   * height its OWN content needed, while its flex parent had already been
+   * shrunk to a smaller allocation by the rest of `.stage-safe`'s layout —
+   * see fit-combined.ts's header comment for the full mechanics). Callers
+   * that know the real remaining budget (fit-combined.ts) pass it in;
+   * defaults to 10 (the original unbounded-ish behaviour) for any other
+   * caller that doesn't have a combined-layout budget to enforce.
+   */
+  maxLines?: number;
 }
 
-const MAX_LINES = 10;
+const DEFAULT_MAX_LINES = 10;
 
-export function fitQuestionText(el: HTMLElement, opts: FitTextOptions): void {
-  const { nominalPx, floorPx, lineHeight } = opts;
+/** Returns the final line count actually used, so a caller (fit-combined.ts)
+ *  can tell whether growth was cut short by `maxLines` (i.e. the box still
+ *  overflows and a further remedy — shrinking options, compressing gaps —
+ *  is needed) rather than converging naturally. */
+export function fitQuestionText(el: HTMLElement, opts: FitTextOptions): { lines: number; overflowing: boolean } {
+  const { nominalPx, floorPx, lineHeight, maxLines = DEFAULT_MAX_LINES } = opts;
   let size = nominalPx;
   const setBox = (fontPx: number, lines: number) => {
     el.style.fontSize = `${fontPx}px`;
     el.style.maxHeight = `${fontPx * lineHeight * lines}px`;
   };
 
-  setBox(size, 2);
+  // The shrink phase's starting line budget must itself respect `maxLines`
+  // — a real bug, caught by direct measurement (worklog-B2.md §6): this
+  // used to hard-code `2` here regardless of `maxLines`, so a caller
+  // passing `maxLines: 1` (a genuinely tiny remaining budget) still got a
+  // 2-line-tall box the whole time, because the growth loop below never
+  // even ran (`lines(2) < maxLines(1)` is false from the first check) —
+  // `maxLines` had no effect at all below 2.
+  const initialLines = Math.max(1, Math.min(2, maxLines));
+
+  setBox(size, initialLines);
   const steps = 24;
   const delta = (nominalPx - floorPx) / steps;
   let guard = 0;
   while (el.scrollHeight > el.clientHeight + 0.5 && size > floorPx && guard < steps) {
     size = Math.max(floorPx, size - delta);
-    setBox(size, 2);
+    setBox(size, initialLines);
     guard += 1;
   }
 
-  let lines = 2;
-  while (el.scrollHeight > el.clientHeight + 0.5 && lines < MAX_LINES) {
+  let lines = initialLines;
+  while (el.scrollHeight > el.clientHeight + 0.5 && lines < maxLines) {
     lines += 1;
     setBox(floorPx, lines);
   }
 
-  // The box has converged to a size that contains the content; max-height
-  // was not the binding constraint by this point. Drop it so there is
-  // nothing left for `overflow: hidden` to clip.
+  const overflowing = el.scrollHeight > el.clientHeight + 0.5;
+
+  // The box has converged to a size that contains the content (or hit
+  // `maxLines` still overflowing — the caller decides what to do next);
+  // max-height was not the binding constraint by this point either way.
+  // Drop it so there is nothing left for `overflow: hidden` to clip.
   el.style.maxHeight = 'none';
+
+  return { lines, overflowing };
 }
