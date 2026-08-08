@@ -14,7 +14,7 @@
  */
 
 import type { OptionIndex, QuestionMedia } from '../contracts';
-import type { DraftBackend, DraftMeta, DraftQuestion } from '../storage/idb';
+import type { DraftBackend, DraftMediaRecord, DraftMeta, DraftQuestion } from '../storage/idb';
 import { createIdbBackend } from '../storage/idb';
 import { AR_COPY } from './copy';
 
@@ -23,11 +23,38 @@ export interface NewQuestionInput {
   options: [string, string, string, string];
   correctIndex: OptionIndex | null;
   media?: QuestionMedia;
+  /** PH-C2 — the actual processed bytes to persist alongside `media`'s
+   *  metadata, when this call is attaching (or replacing) a real media
+   *  file. Optional so PH-C1's existing "metadata only, no blob" callers
+   *  (e.g. a test constructing a question that already references a
+   *  previously-stored sha256) keep working unchanged — see
+   *  `buildMediaRecord` below for exactly when a blob is required. */
+  mediaBlob?: Blob;
   category?: string;
   difficulty?: number;
 }
 
+/** Builds the media-store record to persist alongside a question, or `null`
+ *  when there is nothing new to write (no media, or metadata-only input
+ *  with no accompanying blob — PH-C1's existing usage). */
+function buildMediaRecord(input: Pick<NewQuestionInput, 'media' | 'mediaBlob'>): DraftMediaRecord | null {
+  if (!input.media || input.media.kind === 'none' || !input.mediaBlob) return null;
+  return {
+    sha256: input.media.sha256,
+    ext: input.media.ext,
+    kind: input.media.kind,
+    bytes: input.mediaBlob.size,
+    blob: input.mediaBlob,
+  };
+}
+
 export type WriteResult = { ok: true } | { ok: false; storageFullMessage: string };
+
+/** PH-C3 — the backup badge's three vocabulary states (§5A.2). */
+export type BackupBadgeState =
+  | { kind: 'draft-only' }
+  | { kind: 'saved'; filename: string }
+  | { kind: 'published' };
 
 type GuardedResult<T> = { ok: true; value: T } | { ok: false; storageFullMessage: string };
 
@@ -168,8 +195,9 @@ export class DraftStore {
       category: input.category,
       difficulty: input.difficulty,
     };
+    const mediaRecord = buildMediaRecord(input);
     const result = await this.guardedWrite(async () => {
-      await this.backend.putQuestion(question);
+      await this.backend.putQuestionWithMedia(question, mediaRecord);
       return this.writeMetaRaw();
     });
     if (!result.ok) return result;
@@ -182,8 +210,9 @@ export class DraftStore {
     const existing = this.state.questions[index];
     if (index === -1 || !existing) throw new Error(`unknown draft question: ${id}`);
     const updated: DraftQuestion = { ...existing, ...patch };
+    const mediaRecord = buildMediaRecord(patch);
     const result = await this.guardedWrite(async () => {
-      await this.backend.putQuestion(updated);
+      await this.backend.putQuestionWithMedia(updated, mediaRecord);
       return this.writeMetaRaw();
     });
     if (!result.ok) return result;
@@ -191,6 +220,92 @@ export class DraftStore {
     questions[index] = updated;
     this.setState({ questions, meta: result.value });
     return { ok: true };
+  }
+
+  /** PH-C2 — fetches a previously-stored media blob by its content hash, for
+   *  UI previews (thumbnails, the audio "▶" preview) and for PH-C3's stage
+   *  preview / readiness work. Returns `undefined` if nothing is stored
+   *  under that hash (never throws for a missing key — a caller checks the
+   *  question's own `media.kind` first, so this should not normally miss). */
+  async getMediaBlob(sha256: string): Promise<Blob | undefined> {
+    const record = await this.backend.getMedia(sha256);
+    return record?.blob;
+  }
+
+  /**
+   * PH-C3 — "define the boundary, mark the state, do not build the ZIP."
+   * The real ZIP writer (WL-D/PH-D2) calls this **after** it has actually
+   * written a file to the host's device, passing the real chosen filename
+   * — never called speculatively or before the write is confirmed. Does
+   * **not** touch `updatedAt` (that field means "content last changed",
+   * not "backup last taken" — `hasUnsavedChanges()` depends on keeping the
+   * two independent).
+   */
+  async recordBackup(filename: string): Promise<WriteResult> {
+    const result = await this.guardedWrite(async () => {
+      const at = this.now();
+      const meta: DraftMeta = {
+        createdAt: this.state.meta?.createdAt ?? at,
+        updatedAt: this.state.meta?.updatedAt ?? at,
+        lastBackupAt: at,
+        lastBackupFilename: filename,
+        lastPublishAt: this.state.meta?.lastPublishAt,
+      };
+      await this.backend.putMeta(meta);
+      return meta;
+    });
+    if (!result.ok) return result;
+    this.setState({ meta: result.value });
+    return { ok: true };
+  }
+
+  /** PH-C3 — the publish-side twin of `recordBackup`. WL-D's real publish
+   *  flow calls this once the site is actually live, not before. */
+  async recordPublish(): Promise<WriteResult> {
+    const result = await this.guardedWrite(async () => {
+      const at = this.now();
+      const meta: DraftMeta = {
+        createdAt: this.state.meta?.createdAt ?? at,
+        updatedAt: this.state.meta?.updatedAt ?? at,
+        lastBackupAt: this.state.meta?.lastBackupAt,
+        lastBackupFilename: this.state.meta?.lastBackupFilename,
+        lastPublishAt: at,
+      };
+      await this.backend.putMeta(meta);
+      return meta;
+    });
+    if (!result.ok) return result;
+    this.setState({ meta: result.value });
+    return { ok: true };
+  }
+
+  /** True once the draft has content changes newer than its last backup
+   *  *and* its last publish — drives both the backup-badge state and the
+   *  T1 session-end reminder (PH-C3 AC4). `meta === null` means nothing
+   *  has ever been written, so there is nothing to lose. */
+  hasUnsavedChanges(): boolean {
+    const meta = this.state.meta;
+    if (!meta) return false;
+    const savedAt = Math.max(meta.lastBackupAt ?? 0, meta.lastPublishAt ?? 0);
+    return meta.updatedAt > savedAt;
+  }
+
+  /** The backup badge's three vocabulary states (§5A.2 / PH-C3 AC3), purely
+   *  derived from `meta` — never a separate flag that could drift from it.
+   *  "published" wins over "saved" when both exist and neither is stale,
+   *  and the publish is at least as recent as the backup (a publish IS a
+   *  durable copy, and is the stronger claim of the two). */
+  backupState(): BackupBadgeState {
+    const meta = this.state.meta;
+    if (!meta) return { kind: 'draft-only' };
+    if (this.hasUnsavedChanges()) return { kind: 'draft-only' };
+    if (meta.lastPublishAt !== undefined && meta.lastPublishAt >= (meta.lastBackupAt ?? 0)) {
+      return { kind: 'published' };
+    }
+    if (meta.lastBackupAt !== undefined && meta.lastBackupFilename !== undefined) {
+      return { kind: 'saved', filename: meta.lastBackupFilename };
+    }
+    return { kind: 'draft-only' };
   }
 
   /** No modal — the card collapses to an undo strip for ~8s, then commits

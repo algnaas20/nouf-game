@@ -8,13 +8,26 @@ import type { DraftStore, DraftState } from '../draft-store';
 import { AR_COPY } from '../copy';
 import { isQuestionReady } from '../validate';
 import { formatNumber } from '../format';
+import { loadIntoSharedAudio } from '../../media/audio-element';
+import { openStagePreview, toStageQuestion } from './stage-preview';
 
 export function renderQuestionList(store: DraftStore): HTMLElement {
   const container = document.createElement('div');
   container.className = 'question-list';
   container.dir = 'rtl';
 
+  // PH-C2 — image thumbnails in the list are fetched async from IndexedDB
+  // and rendered via a fresh object URL each render; revoke the previous
+  // batch before creating the next one so a re-render (any store change)
+  // never leaks URLs (§12 rule 1/2 of the media report, applied here too).
+  let activeImagePreviewUrls: string[] = [];
+  function revokeActiveImagePreviews(): void {
+    for (const url of activeImagePreviewUrls) URL.revokeObjectURL(url);
+    activeImagePreviewUrls = [];
+  }
+
   function render(state: DraftState): void {
+    revokeActiveImagePreviews();
     container.innerHTML = '';
 
     if (state.pendingDeletion) {
@@ -49,6 +62,57 @@ export function renderQuestionList(store: DraftStore): HTMLElement {
       badge.className = `ready-badge ${ready ? 'is-ready' : 'is-not-ready'}`;
       badge.textContent = ready ? AR_COPY.ready : AR_COPY.notReady;
 
+      // PH-C2 — media indicator/preview per question. Reuses the ONE shared
+      // <audio> element (never a new one per card) — AC7.
+      const mediaPreview = document.createElement('span');
+      mediaPreview.className = 'question-media-preview';
+      const media = question.media;
+      if (media.kind === 'image') {
+        const img = document.createElement('img');
+        img.className = 'question-media-thumb';
+        img.loading = 'lazy';
+        img.alt = '';
+        void store.getMediaBlob(media.sha256).then((blob) => {
+          if (!blob) return;
+          const url = URL.createObjectURL(blob);
+          activeImagePreviewUrls.push(url);
+          img.src = url;
+        });
+        mediaPreview.append(img);
+      } else if (media.kind === 'audio') {
+        const playButton = document.createElement('button');
+        playButton.type = 'button';
+        playButton.className = 'question-media-play-button';
+        playButton.textContent = AR_COPY.playPreview;
+        playButton.addEventListener('click', () => {
+          void store.getMediaBlob(media.sha256).then((blob) => {
+            if (!blob) return;
+            const { el } = loadIntoSharedAudio(blob);
+            void el.play().catch(() => {
+              /* swallowed — no UI feedback wired for a manual click failing;
+                 not required by any PH-C2 AC */
+            });
+          });
+        });
+        mediaPreview.append(playButton);
+      }
+
+      // PH-C3 — «معاينة كما يراها الجميع»: imports and calls the REAL stage
+      // component (stage-preview.ts) rather than a second implementation.
+      // Gated on readiness — `toStageQuestion` requires a marked correct
+      // option, which `isQuestionReady` (computed above as `ready`) already
+      // guarantees before this button is ever enabled.
+      const previewButton = document.createElement('button');
+      previewButton.type = 'button';
+      previewButton.className = 'preview-like-everyone-button';
+      previewButton.textContent = ready ? AR_COPY.previewLikeEveryone : AR_COPY.notReadyForPreview;
+      previewButton.disabled = !ready;
+      previewButton.addEventListener('click', () => {
+        const stageQuestion = toStageQuestion(question);
+        if (!stageQuestion) return;
+        openStagePreview({ question: stageQuestion });
+      });
+
       const upButton = document.createElement('button');
       upButton.type = 'button';
       upButton.className = 'move-up-button';
@@ -69,7 +133,16 @@ export function renderQuestionList(store: DraftStore): HTMLElement {
       deleteButton.textContent = AR_COPY.deleteButton;
       deleteButton.addEventListener('click', () => store.deleteQuestion(question.id));
 
-      card.append(numberLabel, textPreview, badge, upButton, downButton, deleteButton);
+      card.append(
+        numberLabel,
+        textPreview,
+        mediaPreview,
+        badge,
+        previewButton,
+        upButton,
+        downButton,
+        deleteButton,
+      );
       container.append(card);
     });
   }

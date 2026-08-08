@@ -32,3 +32,16 @@ export function formatDraftDate(timestampMs: number): string {
   const year = formatNumber(date.getFullYear());
   return `${day} ${month} ${year}`;
 }
+
+/** The live media size counter (PH-C2 AC6) — one place, like `formatNumber`,
+ *  so the later Arabic-Indic digit switch (D-10) is a one-line change here
+ *  too. Deliberately coarse (whole kilobytes/megabytes, one decimal past
+ *  1 MB) — this is a size counter for a non-technical host, not a debug
+ *  readout. */
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${formatNumber(bytes)} بايت`;
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${formatNumber(Math.round(kb))} كيلوبايت`;
+  const mb = kb / 1024;
+  return `${formatNumber(Math.round(mb * 10) / 10)} ميجابايت`;
+}

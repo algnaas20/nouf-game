@@ -15,9 +15,14 @@
 import type { OptionIndex, Question } from '../contracts';
 
 const DB_NAME = 'nouf-editor-draft';
-const DB_VERSION = 1;
+// PH-C2 bumps this to add the media-blob object store. IndexedDB runs
+// `onupgradeneeded` for any existing database below the new version, so a
+// browser holding a v1 (PH-C1) draft gains the `media` store automatically
+// on first open in this phase — no separate migration step, no data loss.
+const DB_VERSION = 2;
 const STORE_QUESTIONS = 'questions';
 const STORE_META = 'meta';
+const STORE_MEDIA = 'media';
 const META_KEY = 'draft';
 
 /**
@@ -45,6 +50,33 @@ export interface DraftQuestion {
 export interface DraftMeta {
   createdAt: number;
   updatedAt: number;
+  /**
+   * PH-C3 — the backup/publish boundary this phase owns: "mark the state,
+   * do not build the ZIP" (WL-D/PH-D2 owns the real writer). Set only by
+   * `DraftStore.recordBackup()` / `recordPublish()`, both called from a
+   * caller-supplied, already-completed backup/publish result — never
+   * inferred or guessed here.
+   */
+  lastBackupAt?: number;
+  /** The actual filename the real (future) ZIP writer produced — shown
+   *  verbatim in the "محفوظ على جهازك" backup-badge state (PH-C3 AC3). */
+  lastBackupFilename?: string;
+  lastPublishAt?: number;
+}
+
+/**
+ * A media blob and its identifying metadata, keyed by its full SHA-256 hex
+ * digest (§6 of media-storage-investigation.md — content-addressed).
+ * PH-C2. Stored in its own object store so multiple questions can reference
+ * the same `sha256` without duplicating the blob (a `put` with the same key
+ * is a harmless overwrite of identical bytes).
+ */
+export interface DraftMediaRecord {
+  sha256: string;
+  ext: string;
+  kind: 'image' | 'audio';
+  bytes: number;
+  blob: Blob;
 }
 
 /**
@@ -52,12 +84,22 @@ export interface DraftMeta {
  * by `createIdbBackend()` below; tests inject a hand-written fake that
  * satisfies the same shape without touching a real IndexedDB (Node has
  * none — the real backend is proven against a real browser instead, see
- * tests/editor/live/persistence-and-quota.ts).
+ * tests/editor/live/persistence-and-quota.ts and
+ * tests/editor/live/media-intake.ts).
  */
 export interface DraftBackend {
   listQuestions(): Promise<DraftQuestion[]>;
   putQuestion(question: DraftQuestion): Promise<void>;
+  /** PH-C2 — writes the question and (if given) its media blob in **one**
+   *  IndexedDB transaction spanning both object stores, so a question can
+   *  never end up persisted while referencing a media blob that was not
+   *  (the C1 prompt's "metadata and blobs together, one transaction per
+   *  question" rule, extended now that blobs exist). `media: null` behaves
+   *  exactly like `putQuestion` alone (a text-only question, or an edit that
+   *  does not touch media). */
+  putQuestionWithMedia(question: DraftQuestion, media: DraftMediaRecord | null): Promise<void>;
   deleteQuestion(id: string): Promise<void>;
+  getMedia(sha256: string): Promise<DraftMediaRecord | undefined>;
   getMeta(): Promise<DraftMeta | null>;
   putMeta(meta: DraftMeta): Promise<void>;
   clearAll(): Promise<void>;
@@ -79,6 +121,10 @@ function openDb(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(STORE_META)) {
         db.createObjectStore(STORE_META, { keyPath: 'key' });
+      }
+      // PH-C2 (DB_VERSION 2) — media blobs, keyed by their own SHA-256.
+      if (!db.objectStoreNames.contains(STORE_MEDIA)) {
+        db.createObjectStore(STORE_MEDIA, { keyPath: 'sha256' });
       }
     };
     request.onsuccess = () => resolve(request.result);
@@ -126,6 +172,21 @@ export function createIdbBackend(): DraftBackend {
       tx.objectStore(STORE_QUESTIONS).put(question);
       await runWriteTx(tx);
     },
+    async putQuestionWithMedia(question, media) {
+      const db = await getDb();
+      const storeNames = media ? [STORE_QUESTIONS, STORE_MEDIA] : [STORE_QUESTIONS];
+      const tx = db.transaction(storeNames, 'readwrite');
+      tx.objectStore(STORE_QUESTIONS).put(question);
+      if (media) tx.objectStore(STORE_MEDIA).put(media);
+      await runWriteTx(tx);
+    },
+    async getMedia(sha256) {
+      const db = await getDb();
+      const tx = db.transaction(STORE_MEDIA, 'readonly');
+      return runRequest<DraftMediaRecord | undefined>(
+        tx.objectStore(STORE_MEDIA).get(sha256) as IDBRequest<DraftMediaRecord | undefined>,
+      );
+    },
     async deleteQuestion(id) {
       const db = await getDb();
       const tx = db.transaction(STORE_QUESTIONS, 'readwrite');
@@ -149,9 +210,10 @@ export function createIdbBackend(): DraftBackend {
     },
     async clearAll() {
       const db = await getDb();
-      const tx = db.transaction([STORE_QUESTIONS, STORE_META], 'readwrite');
+      const tx = db.transaction([STORE_QUESTIONS, STORE_META, STORE_MEDIA], 'readwrite');
       tx.objectStore(STORE_QUESTIONS).clear();
       tx.objectStore(STORE_META).clear();
+      tx.objectStore(STORE_MEDIA).clear();
       await runWriteTx(tx);
     },
   };
