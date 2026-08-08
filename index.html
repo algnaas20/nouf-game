@@ -3,11 +3,27 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- D-13 / PH-D3 AC6 — reduce search-engine indexing (zero cost); does
+         not restrict access, only discoverability (static-delivery-
+         investigation.md §14 already states this honestly). -->
+    <meta name="robots" content="noindex" />
+    <meta name="theme-color" content="#0E1116" />
     <title>لعبة نوف</title>
     <link rel="icon" type="image/svg+xml" href="./icons/favicon.svg" />
+    <link rel="manifest" href="./manifest.webmanifest" />
   </head>
   <body>
     <div id="app"></div>
     <script type="module" src="./src/main.ts"></script>
+    <!--
+      PH-D3 — the service worker registration and the visible version
+      badge/publish-recipe overlay are separate, WL-D-owned entry modules,
+      loaded alongside WL-B's src/main.ts rather than folded into it (that
+      file is WL-B-owned; this keeps every line's own script tag under the
+      line that owns it, in the one file — index.html — that is allowed to
+      list them all).
+    -->
+    <script type="module" src="./src/pwa/register.ts"></script>
+    <script type="module" src="./src/pwa/version.ts"></script>
   </body>
 </html>

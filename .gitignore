@@ -2,4 +2,9 @@
 dist/
 .vite/
 verify/
+verify-pwa/
+
+# PH-D2 live-test artefact — a real downloaded pack, regenerated on every
+# run of tests/pack/live/pack-roundtrip.ts, not shipped product code.
+tests/pack/live/downloaded-backup.zip
 
