@@ -10,8 +10,9 @@
  * (see legal.ts for where the actual win/exhaustion decision is computed).
  */
 
-import type { GameEvent, GameState, MazeCell, StateId, TeamId } from '../contracts';
+import type { GameEvent, GameState, MazeLayout, StateId, TeamId } from '../contracts';
 import { QUESTION_SHOWN_DRAWS } from './select';
+import { buildMaze, resolveMove } from './rules/maze';
 
 const QUESTION_SHOWN_LEGAL_FROM: readonly StateId[] = [
   'TURN_START',
@@ -23,6 +24,12 @@ const GAME_ENDED_LEGAL_FROM: readonly StateId[] = [
   'PROGRESSION_APPLIED',
   'FINAL_BALANCING_TURN',
   'TIEBREAK',
+  // F-2: a game started with an empty deck reaches TURN_START directly from
+  // GAME_STARTED (never through progression.ts) with nothing to show. Without
+  // this, legal.ts's only possible candidate there (a declared-draw
+  // GAME_ENDED) would itself be illegal to apply, and the freeze would
+  // survive the legal.ts fix alone. See worklog-A5.md §1.
+  'TURN_START',
 ];
 
 export class IllegalTransitionError extends Error {
@@ -50,9 +57,23 @@ function clampPair(pair: [number, number], min: number, max: number): [number, n
   return [Math.min(max, Math.max(min, pair[0])), Math.min(max, Math.max(min, pair[1]))];
 }
 
-function buildMaze(N: number): MazeCell[] {
-  return Array.from({ length: N + 1 }, (_, index) => ({ index, event: null }));
+function setAt<T>(pair: [T, T], idx: 0 | 1, value: T): [T, T] {
+  const next: [T, T] = [pair[0], pair[1]];
+  next[idx] = value;
+  return next;
 }
+
+/** Sentinel used only before `GAME_STARTED`; `genVersion: 0` never matches
+ *  `MAZE_GEN_VERSION` (1), same "not started yet" convention as `deckHash: ''`. */
+const EMPTY_MAZE: MazeLayout = {
+  N: 0,
+  routes: [
+    { team: 'A', junctions: [] },
+    { team: 'B', junctions: [] },
+  ],
+  decorSeed: 0,
+  genVersion: 0,
+};
 
 /**
  * The state before any event has been applied. Not itself a state a UI ever
@@ -68,7 +89,9 @@ export function initialState(): GameState {
     currentTeam: 'A',
     positions: [0, 0],
     attempts: [0, 0],
-    maze: [],
+    maze: EMPTY_MAZE,
+    closedExits: [[], []],
+    wasted: [0, 0],
     deckHash: '',
     usedQuestionIds: [],
     currentQuestionId: null,
@@ -92,7 +115,9 @@ export function applyEvent(state: GameState, event: GameEvent): GameState {
         currentTeam: event.firstTeam,
         positions: [0, 0],
         attempts: [0, 0],
-        maze: buildMaze(event.N),
+        maze: buildMaze(event.seed, event.N),
+        closedExits: [[], []],
+        wasted: [0, 0],
         deckHash: event.deckHash,
         usedQuestionIds: [],
         currentQuestionId: null,
@@ -149,12 +174,35 @@ export function applyEvent(state: GameState, event: GameEvent): GameState {
       if (state.stateId !== 'ANSWER_REVEALED') {
         throw new IllegalTransitionError(event.type, state.stateId);
       }
-      const positions = clampPair(bumpPair(state.positions, event.team, event.delta), 0, state.N);
-      return {
-        ...state,
-        stateId: 'PROGRESSION_APPLIED',
-        positions,
-      };
+      const idx = teamIndex(event.team);
+      const junctionIndex = state.positions[idx];
+
+      // Wrong answer, or the team had already reached the goal (junction
+      // beyond the route's last index): nothing moves. `exit: null` is the
+      // ONLY event shape for this — the result is derived, never stored, so
+      // the log can never contradict the rules (game-systems-expert §10.2).
+      if (event.exit === null || junctionIndex >= state.N) {
+        return { ...state, stateId: 'PROGRESSION_APPLIED' };
+      }
+
+      const result = resolveMove(
+        state.maze,
+        event.team,
+        junctionIndex,
+        state.closedExits[idx],
+        state.wasted[idx],
+        event.exit,
+      );
+
+      if (result === 'advance') {
+        const positions = clampPair(bumpPair(state.positions, event.team, 1), 0, state.N);
+        const closedExits = setAt(state.closedExits, idx, []);
+        return { ...state, stateId: 'PROGRESSION_APPLIED', positions, closedExits };
+      }
+
+      const closedExits = setAt(state.closedExits, idx, [...state.closedExits[idx], event.exit]);
+      const wasted = bumpPair(state.wasted, event.team, 1);
+      return { ...state, stateId: 'PROGRESSION_APPLIED', closedExits, wasted };
     }
 
     case 'TURN_PASSED': {

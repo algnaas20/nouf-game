@@ -11,25 +11,27 @@
  * one purely from `positions`/`N`).
  */
 
-import type { AnswerChosenEvent, GameEvent, GameState } from '../contracts';
+import type { AnswerChosenEvent, GameEvent, GameState, MoveAppliedEvent, TeamId } from '../contracts';
 import type { GameContext } from './context';
 import { selectNextQuestion, shuffleOptionOrder } from './select';
 import { resolveProgression } from './rules/progression';
+import { availableExits } from './rules/maze';
 
 export type { GameContext } from './context';
 
 function showNextQuestion(state: GameState, ctx: GameContext, seq: number, now: () => number): GameEvent[] {
   const sel = selectNextQuestion(state, ctx.deck);
   if (!sel) {
-    if (state.stateId === 'TURN_START') {
-      // Structurally unreachable: TURN_PASSED only ever lands on
-      // TURN_START when the exhaustion check already ran and found
-      // unused questions remaining (see rules/progression.ts). Defensive.
-      return [];
-    }
-    // Deck exhausted while a FINAL_BALANCING_TURN or TIEBREAK question was
-    // due. D-09.10 reserves 4 questions precisely so this should not occur
-    // for a green/warn-band deck; declared draw is the documented fallback
+    // Deck exhausted — OR, at the very first TURN_START reached directly
+    // from GAME_STARTED (never through progression.ts's own exhaustion
+    // check), simply empty from the start: D-25 means a fresh author's deck
+    // really can be zero questions the first time anyone presses "play".
+    // F-2: a TURN_START special case here used to return `[]`. That
+    // reasoning only holds for a TURN_START reached via TURN_PASSED (always
+    // downstream of progression.ts's exhaustion check) — never for the very
+    // first arrival — and it froze the game solid with zero legal events,
+    // forever (see worklog-A5.md §1). Declared draw is the same documented
+    // fallback used for every other "no question left to show" case
     // (game-systems-expert §5.5: "if no tiebreak question remains → declared draw").
     return [{ type: 'GAME_ENDED', seq, at: now(), outcome: 'draw' }];
   }
@@ -83,14 +85,23 @@ export function legalEvents(state: GameState, ctx: GameContext): GameEvent[] {
     case 'ANSWER_REVEALED': {
       const last = ctx.events[ctx.events.length - 1];
       const correct = last !== undefined && last.type === 'ANSWER_CHOSEN' ? last.correct : false;
-      const ev: GameEvent = {
-        type: 'MOVE_APPLIED',
-        seq,
-        at: now(),
-        team: state.currentTeam,
-        delta: correct ? 1 : 0,
-      };
-      return [ev];
+      const team: TeamId = state.currentTeam;
+      const idx = team === 'A' ? 0 : 1;
+      const junctionIndex = state.positions[idx];
+
+      // Wrong answer, or the team has already reached the goal (can still
+      // happen mid-tiebreak, where further correct answers keep clamping at
+      // N): nothing to move, exactly one MOVE_APPLIED candidate with no exit.
+      if (!correct || junctionIndex >= state.N) {
+        const ev: MoveAppliedEvent = { type: 'MOVE_APPLIED', seq, at: now(), team, exit: null };
+        return [ev];
+      }
+
+      // One MOVE_APPLIED candidate per available exit — same shape as the
+      // four ANSWER_CHOSEN candidates above: the operator/policy picks one
+      // (game-systems-expert §10.4). I12 guarantees this is always >= 2.
+      const exits = availableExits(state.maze, team, junctionIndex, state.closedExits[idx]);
+      return exits.map((exit): MoveAppliedEvent => ({ type: 'MOVE_APPLIED', seq, at: now(), team, exit }));
     }
 
     case 'PROGRESSION_APPLIED':

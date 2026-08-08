@@ -19,6 +19,7 @@ import {
   saveSession,
   type SessionStorageLike,
 } from '../../src/core/session-store';
+import { MAZE_GEN_VERSION } from '../../src/core/rules/maze';
 
 function createFakeStorage(): SessionStorageLike & { raw: Map<string, string> } {
   const raw = new Map<string, string>();
@@ -64,6 +65,7 @@ function playPartialGame(deck: readonly Question[], N: number, firstTeam: TeamId
       teamNames: ['فريق أ', 'فريق ب'],
       firstTeam,
       deckHash: computeDeckHash(deck),
+      mazeGenVersion: MAZE_GEN_VERSION,
     },
   ];
   let state = fold(events);
@@ -111,6 +113,27 @@ describe('PH-A4 — session-store', () => {
     }
   });
 
+  it('M-RESUME-1: a mazeGenVersion mismatch refuses resume, does not partial-load', () => {
+    const storage = createFakeStorage();
+    const deck = generateDeck(10);
+    const events = playPartialGame(deck, 5, 'A');
+    // Corrupt only the maze generator version on the stored GAME_STARTED —
+    // deckHash still matches, so this isolates the maze-version check.
+    const tampered = events.map((e) =>
+      e.type === 'GAME_STARTED' ? { ...e, mazeGenVersion: e.mazeGenVersion + 1 } : e,
+    );
+    saveSession(tampered, storage);
+
+    const result = checkResume(computeDeckHash(deck), storage);
+    expect(result.kind).toBe('refused');
+    if (result.kind === 'refused' && result.reason === 'maze-version-mismatch') {
+      expect(result.storedVersion).toBe(MAZE_GEN_VERSION + 1);
+      expect(result.currentVersion).toBe(MAZE_GEN_VERSION);
+    } else {
+      throw new Error('expected a maze-version-mismatch refusal');
+    }
+  });
+
   it('criterion 4: checkResume never mutates storage and never auto-decides — matching deck returns the full resumable state', () => {
     const storage = createFakeStorage();
     const deck = generateDeck(10);
@@ -155,7 +178,7 @@ describe('PH-A4 — session-store', () => {
     const storage = createFakeStorage();
     const deck = generateDeck(3);
     const events: GameEvent[] = [
-      { type: 'GAME_STARTED', seq: 0, at: 0, seed: 1, N: 1, teamNames: ['أ', 'ب'], firstTeam: 'A', deckHash: computeDeckHash(deck) },
+      { type: 'GAME_STARTED', seq: 0, at: 0, seed: 1, N: 1, teamNames: ['أ', 'ب'], firstTeam: 'A', deckHash: computeDeckHash(deck), mazeGenVersion: MAZE_GEN_VERSION },
     ];
     let state = fold(events);
     while (state.stateId !== 'FINISHED') {

@@ -118,6 +118,19 @@ export function resolveProgression(
       const outcome: Outcome = posA > posB ? 'winA' : 'winB';
       return [{ type: 'GAME_ENDED', seq, at: now(), outcome }];
     }
+    // game-systems-expert §6.3 amendment to D-09.14/15 (Theorem 2, Path 3):
+    // under the branching maze, equal positions no longer implies equal
+    // correct-answer counts — one team may have spent its one stumble. Both
+    // teams are still < N here (checked above/by the earlier branches), so
+    // `correct[t] === positions[t] + wasted[t]` exactly, with no clamping
+    // distortion. The team with more correct answers wins outright; only
+    // when correct ALSO ties does D-09.15's "سؤال من الحضور" still apply.
+    const correctA = posA + state.wasted[0];
+    const correctB = posB + state.wasted[1];
+    if (correctA !== correctB) {
+      const outcome: Outcome = correctA > correctB ? 'winA' : 'winB';
+      return [{ type: 'GAME_ENDED', seq, at: now(), outcome }];
+    }
     // D-09.15: level and exhausted — "سؤال من الحضور". Three legal
     // candidates; the room (not the RNG) picks which one gets applied.
     return [
