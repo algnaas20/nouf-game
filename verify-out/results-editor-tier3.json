@@ -58,14 +58,14 @@
         "submitError": null,
         "addButtonRectAtClick": {
           "x": 16,
-          "y": 744.140625,
+          "y": 744.25,
           "width": 358,
           "height": 56
         },
         "addButtonScrollTicks": 0,
         "submitRectAtClick": {
           "x": 123.34375,
-          "y": 765.53125,
+          "y": 765.640625,
           "width": 233.65625,
           "height": 55
         },
@@ -80,7 +80,7 @@
         "submitError": null,
         "addButtonRectAtClick": {
           "x": 16,
-          "y": 540.140625,
+          "y": 540.25,
           "width": 328,
           "height": 56
         },
@@ -99,7 +99,7 @@
   },
   "V40_touch_targets": {
     "pass": true,
-    "buttonCount": 17,
+    "buttonCount": 16,
     "radioToggleCount": 4,
     "undersizedTargets": [],
     "inputCount": 10,

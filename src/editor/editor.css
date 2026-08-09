@@ -373,6 +373,29 @@
   align-items: center;
   gap: 12px;
 }
+/* Same cascade-defeat bug as `.editor-sticky-bar[hidden]` above, found
+ * live (coordinator follow-up, 2026-08-09): `.storage-full-banner` and
+ * `.session-end-reminder` both toggle the `hidden` IDL property
+ * (`storage-full-banner.ts`'s `setStorageFullBannerVisible`,
+ * `backup-badge.ts`'s `render`) to show/hide, but the `display: flex`
+ * rule immediately above is an author-stylesheet rule of the SAME
+ * specificity as the user-agent's `[hidden] { display: none }` default —
+ * author origin wins regardless of specificity, so `hidden = true` had NO
+ * visible effect (confirmed live: `getComputedStyle(...).display` reads
+ * `"flex"` and the element's bounding rect is non-zero even with
+ * `el.hidden === true`). This is exactly why the T1 «قبل ما تسكّر»
+ * reminder appeared on a fresh, never-edited draft and stayed visible
+ * after a backup was recorded — the underlying `hasUnsavedChanges()`
+ * predicate in `draft-store.ts` was correct throughout; only this
+ * rendering layer ignored it. `.return-prompt`/`.backup-badge-area` never
+ * toggle `hidden` (the former is `.remove()`d, the latter is always
+ * shown), so they needed no override — restated here for the SAME two
+ * selectors that actually use it, not the whole group, to keep the reason
+ * this rule exists legible at the point it is used. */
+.storage-full-banner[hidden],
+.session-end-reminder[hidden] {
+  display: none;
+}
 .return-prompt-message,
 .storage-full-banner-message {
   flex: 1 1 200px;

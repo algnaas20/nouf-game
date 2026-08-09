@@ -10,7 +10,7 @@
  * as if they were scripted.
  */
 
-import { formatNumber } from './format';
+import { formatNumber, formatQuestionCount } from './format';
 
 export const AR_COPY = {
   // §5A.2 — the vocabulary rule. Never "محفوظ" alone, never "آمن", for the draft.
@@ -98,36 +98,50 @@ export function returnPromptMessage(dateLabel: string): string {
 }
 
 /**
- * خطة.md Appendix أ — "مؤشّر الرزمة" family, literal, `⟨...⟩` placeholder
- * filled with `formatNumber` (Western digits, per D-10 — same convention
- * as every other number in the editor, even though the Appendix's own
- * rendering shows Arabic-Indic digits; that switch is deferred project-wide
- * to a single later flip). See `src/editor/ui/readiness-meter.ts` for the
- * derivation proving these are evaluated at the N=10 "عادية" preset,
- * matching the two literal examples exactly (`أسئلتك ٢٦ …` / `أسئلتك ١٨ …`).
+ * D-09.21…D-09.26 (`addendum-deck-floor-2026-08-08.md` §"Editor readiness
+ * meter — continuous, three states", final, binding — supersedes the
+ * earlier warn/refuse/green strings entirely, not just their vocabulary).
+ *
+ * All three take `⟨D⟩`/`⟨N⟩`/the "questions needed" number from the
+ * caller — never re-derive a threshold here (D-09.24: "add X more" must
+ * use the SAME `ceil` the band check itself uses, or the message can
+ * promise a number that does not actually flip the band).
+ * `src/editor/ui/readiness-meter.ts` is the only caller and is the one
+ * that imports WL-A's `deckBand`/`preselectTrackLength`/
+ * `questionsNeededForPlayable`/`questionsNeededForComfortable`
+ * (`src/core/rules/deck-bands.ts`) to compute `N`/the needed counts — this
+ * module only formats what it is given. Digits stay Western via
+ * `formatNumber` (D-10, deferred project-wide) even though the addendum's
+ * own literal examples are typeset in Arabic-Indic for readability — same
+ * convention every other number in the editor already follows.
+ *
+ * D-09.26 (binding vocabulary, folded in here): track length is «محطات»,
+ * never «خطوات» — a «خطوة» is now a move under the branching maze, and a
+ * move can be wasted on a dead end, so «خطوات» is literally false for most
+ * teams; «محطة» is the junction the token actually stands on.
  */
-export function deckWarnMessage(deckSize: number): string {
-  return `أسئلتك ${formatNumber(deckSize)} — تكفي غالباً، وإذا كثرت الأخطاء ممكن تخلص الأسئلة قبل ما يوصل أحد`;
+
+/** §7 "Below the floor": «أسئلتك ⟨D⟩ — ناقصك ⟨phrase(R)⟩ عشان تقدر تبدأ.»
+ *  `questionsNeeded` is `questionsNeededForPlayable(D, N)` for whatever `N`
+ *  the caller resolved via `preselectTrackLength` — the caller's job, not
+ *  this function's. */
+export function deckRefuseMessage(deckSize: number, questionsNeeded: number): string {
+  return `أسئلتك ${formatNumber(deckSize)} — ناقصك ${formatQuestionCount(questionsNeeded)} عشان تقدر تبدأ.`;
 }
 
-/**
- * D-09.26 (`addendum-deck-floor-2026-08-08.md`, binding) — track length is
- * «محطات», never «خطوات», overriding خطة.md's own literal Appendix-أ string
- * («تكفي لمسار ٦ خطوات») by name: under the branching maze a «خطوة» is a
- * move, and a move can be wasted on a dead end, so «خطوات» is now literally
- * false for most teams. «محطة» is the junction the token actually stands
- * on — what this count is really counting.
- */
-export function deckRefuseMessage(deckSize: number, fallbackTrackLength: number): string {
-  return `أسئلتك ${formatNumber(deckSize)} — تكفي لمسار ${formatNumber(fallbackTrackLength)} محطات`;
+/** §7 "Playable": «أسئلتك ⟨D⟩ — تكفي لمسار ⟨N⟩ محطات. زد ⟨phrase(G)⟩ وتلعب
+ *  بارتياح.» `questionsNeededForComfort` is `questionsNeededForComfortable(D, N)`
+ *  for the SAME `N` used in the first sentence — the caller's
+ *  responsibility to pass the one consistent `N` throughout. */
+export function deckWarnMessage(deckSize: number, trackLength: number, questionsNeededForComfort: number): string {
+  return `أسئلتك ${formatNumber(deckSize)} — تكفي لمسار ${formatNumber(trackLength)} محطات. زد ${formatQuestionCount(questionsNeededForComfort)} وتلعب بارتياح.`;
 }
 
-/** PH-C3: no literal "all clear" deck message exists in Appendix أ (only
- *  the warn/refuse cases are scripted — silence-implies-fine is the pattern
- *  elsewhere in this project, e.g. no "well done" ever appears). Composed,
- *  in the same voice, reusing the literal verb "تكفي". */
-export function deckGreenMessage(deckSize: number): string {
-  return `أسئلتك ${formatNumber(deckSize)} — تكفي بارتياح لمسار عادي (10 محطات)`;
+/** §7 "Comfortable": «أسئلتك ⟨D⟩ — تكفي بارتياح لمسار ⟨N⟩ محطات.» — replaces
+ *  the previous hardcoded «(10 محطات)» string (§4 of the addendum), now
+ *  reading the real `N` the deck actually supports instead of a literal 10. */
+export function deckGreenMessage(deckSize: number, trackLength: number): string {
+  return `أسئلتك ${formatNumber(deckSize)} — تكفي بارتياح لمسار ${formatNumber(trackLength)} محطات.`;
 }
 
 /** PH-C3: composed — the proactive editor-side heads-up ahead of WL-D's
