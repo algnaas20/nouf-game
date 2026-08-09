@@ -16,7 +16,7 @@
 - [x] Every interactive control in editor reachable+clickable at a matrix of real viewport sizes (portrait/landscape, phone + desktop), including long question list and long form — proven with REAL wheel-scroll + coordinate click, not `scrollIntoViewIfNeeded` (see §2's red-team finding). `tests/editor/live-tier3-reachability.manual.cjs`, `OVERALL_PASS: true`.
 - [x] Standing live check script added under `tests/editor/` (`live-tier3-reachability.manual.cjs`, covers V38–V43 addendum checks touching the editor).
 - [x] Phone layout addendum applied — Tier-3 responsive CSS (breakpoints 600/1024, §4 type scale, 48x48 touch targets, sticky action bars) — see §3.
-- [~] Deck-floor addendum strings — **partially done, rest blocked**, see §4/§5. Vocabulary fix (خطوات→محطات, D-09.26) and the `formatQuestionCount` count-agreement helper (D-09.25) are done. The "how many more to reach playable/comfortable" numbers and the N=4 preset chip cannot be wired without WL-A's `deck-bands.ts` update, which has not landed on `origin/main` as of close-out (confirmed present and complete in WL-A's own worktree by a read-only peek, but not mine to copy across worktrees or merge early).
+- [x] Deck-floor addendum strings — **unblocked and complete, see §6**. WL-A's `deck-bands.ts` landed on branch `wl-a-core` and was merged in; the readiness meter now imports `preselectTrackLength`/`deckBand`/`questionsNeededForPlayable`/`questionsNeededForComfortable` and never re-derives a threshold.
 - [x] All project checks green (typecheck/test/build) before handoff — `npx tsc --noEmit` clean, `npx vitest run` 21/21 files, 103/103 tests, `npm run build` clean with 0 delivery-gate violations.
 - [x] Servers/worktree cleaned up — dev server on :3013 (PID 22008) stopped, port confirmed free. `git status --short` clean of stray files (one leftover debug screenshot removed).
 
@@ -89,3 +89,39 @@ Read both `addendum-deck-floor-2026-08-08.md` (play-experience-advisor) and the 
 - Read `src/editor/app.ts`, `src/editor/editor.css`, `src/stage/app.ts` (`renderEditorShell`), `src/styles/stage.css`, `src/styles/tokens.css`.
 - Structural read: `.editor-shell` is built by WL-B as a SIBLING of `.stage-root` (not nested inside it), with `min-block-size: 100vh`, no `overflow:hidden`, no `position:fixed` — i.e. WL-B already deliberately built it as a normal scrolling document per their own comment ("`.stage-root` is `position: fixed` with `overflow: hidden`... which would silently clip a question list of any real length"). `src/editor/editor.css` (mine) adds no containment either. This is the opposite of the stage's fixed-canvas problem — on paper the editor should already scroll. Hypothesis needs live confirmation, not just source reading, since the user hit this complaint in the actual editor.
 - Dev server started in worktree on port 3013 (`npx vite --port 3013 --strictPort`).
+
+---
+
+## 6. Deck-floor addendum — unblocked, wired, and verified (coordinator follow-up, 2026-08-08)
+
+Coordinator confirmed C4 accepted/merged/published (user replied «ممتاز»), and unblocked §4's disclosed dependency: WL-A's `deck-bands.ts` landed on branch `wl-a-core`. `git merge main` (already up to date — my worktree already matched `origin/main`) then `git merge wl-a-core` — clean, fast-forward-incompatible merge (real merge commit), zero conflicts, 21 files changed (maze contracts, `deck-bands.ts` additions, sim/reducer updates — all WL-A's).
+
+**Confirmed my files unaffected, per the coordinator's explicit request to report rather than work around it**: `npx tsc --noEmit` after the merge produces exactly **one** error, in `src/stage/session/game-driver.ts` (`GameStartedEvent` now requires `mazeGenVersion`) — WL-B's file, not mine, and exactly the "expect the stage's typecheck to complain until WL-B lands its adaptation" the coordinator predicted. `npx vitest run tests/editor` — 7 files / 39 tests, all green, immediately after the merge and before any further edits from me.
+
+### Fixes/additions table
+
+| # | File | Change | Why |
+|---|---|---|---|
+| 1 | `src/editor/copy.ts` | Rewrote `deckRefuseMessage`, `deckWarnMessage`, `deckGreenMessage` to the addendum's final §7 literal strings ("Below the floor" / "Playable" / "Comfortable"), taking `⟨N⟩`/`⟨questions-needed⟩` as parameters from the caller instead of composing any arithmetic themselves. `deckWarnMessage` gained a `trackLength` param (was deck-size-only); `deckRefuseMessage`'s second param changed meaning from "fallback track length" to "questions needed" (§7's refuse variant never names a track, only the gap) | D-09.21/D-09.24 — every refusal states how many more, computed with the exact `ceil` the band check uses; copy.ts never re-derives that number, only formats it |
+| 2 | `src/editor/ui/readiness-meter.ts` | Replaced the hardcoded `READINESS_REFERENCE_TRACK_LENGTH = 10` with dynamic `N = preselectTrackLength(deckSize)` (imported from `deck-bands.ts`, the same function team-setup uses); imports and calls `questionsNeededForPlayable`/`questionsNeededForComfortable` for the refuse/warn states respectively. `ReadinessResult` gained a `trackLength` field | D-09.22 — the number belongs in the editor, live, on every question added; N=10 was an arbitrary reference that no longer matches the new preset floor (N=4, «سريعة») |
+| 3 | `src/editor/format.ts` | `formatQuestionCount` (written last session, unwired until now) is now consumed by `deckRefuseMessage`/`deckWarnMessage` | D-09.25 — count agreement, no improvisation |
+| 4 | `tests/editor/readiness-meter.test.ts` | Rewrote against the addendum's own worked examples verbatim: D=9→refuse/N=4/R=3 (`«أسئلتك 9 — ناقصك 3 أسئلة عشان تقدر تبدأ.»`), D=14→warn/N=4/G=7 (`«أسئلتك 14 — تكفي لمسار 4 محطات. زد 7 أسئلة وتلعب بارتياح.»`), D=60→green with the real supported N (not a hardcoded 10), D=11→count-agreement edge case («سؤال واحد»), a general cross-check that `computeReadiness` never diverges from `deckBand(D, preselectTrackLength(D))`, and an explicit D-09.13‴ migration-guard test (D=14 must never be refused, since the old N=6 floor would have newly refused it under the `N→N+1` shift without «سريعة») | Every number in this file is now the addendum's own literal worked example or a direct cross-check against WL-A's real functions — none invented |
+
+### Item 2 — «سريعة» preset, confirmed reading from `PRESETS`, no new UI needed
+
+Grepped `src/editor/**` for any literal preset list (`قصيرة`/`عادية`/`طويلة`/hardcoded `10`) before writing anything: the **only** place the editor ever surfaced a track length was the old `deckGreenMessage`'s hardcoded `"(10 محطات)"` string — exactly the string the addendum's §4 names for replacement. There is no separate preset-picker/chip-list UI inside `src/editor/**` (that lives on `team-setup.ts`, WL-B's). Fixing `deckGreenMessage`/`deckWarnMessage`/`deckRefuseMessage` to take `trackLength` from `preselectTrackLength(D)` — which reads WL-A's `PRESETS = [4, 6, 10, 14]` internally — *is* "reading from PRESETS rather than a literal list" for every place the editor surfaces a track length. Confirmed complete, not partial.
+
+### Verification
+
+- `npx tsc --noEmit` — same single pre-existing WL-B error as before this section's edits (`game-driver.ts`), zero errors in anything I touched.
+- `npx vitest run tests/editor` — 7 files / **39 tests** passed (was 38; the rewritten `readiness-meter.test.ts` net-added one).
+- `npx vitest run` (whole repo) — 23 files / **128 tests** passed.
+- `npm run build` — clean, PH-D1 gates 0 violations (0/0/0/0, `.nojekyll` present).
+- Standing check (`node tests/editor/live-tier3-reachability.manual.cjs`, port 3013) re-run after all of the above — still `OVERALL_PASS: true`; the deck-floor wiring touches none of the reachability surface.
+- Live smoke, real browser + real IndexedDB (`npx tsx tests/editor/live/preview-readiness-backup.ts`): **AC2's two cross-checks pass** — `computeReadiness(1).message` live-DOM-matches `"أسئلتك 1 — ناقصك 11 سؤالاً عشان تقدر تبدأ."` and `computeReadiness(102).message` live-DOM-matches `"أسئلتك 102 — تكفي بارتياح لمسار 10 محطات."` — the real mounted UI is provably not drifted from the pure functions. AC1/AC3b/AC3c/AC6 also pass.
+
+**Found, NOT fixed (out of scope, disclosed rather than silently worked around)**: the same live script's AC3a and AC4-clean-case fail — `.session-end-reminder` (the T1 "save before you close" banner) shows even on a freshly-loaded, never-edited draft, and stays shown after `recordBackup()`. Reproduced twice, consistent (not a flake). This is `draft-store.ts`'s `hasUnsavedChanges()`/`meta.updatedAt` vs `lastBackupAt` timing logic — a different module than anything touched tonight (I did not edit `draft-store.ts` or `backup-badge.ts` in either half of this session), not caused by the `wl-a-core` merge (that merge only touches `src/core/**`, and `draft-store.ts`/`backup-badge.ts` are not in `src/core/**`), and orthogonal to both reachability and the deck-floor task. Left exactly as found, flagged here rather than pulled into this task's scope.
+
+### Close-out (second pass)
+
+Dev server on :3013 stopped and port confirmed free again. `git status --short`: only the files listed in the fixes/additions table above, plus regenerated live-script screenshots/JSON (legitimate re-run evidence, not stray). Not committed — coordinator commits.

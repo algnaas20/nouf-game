@@ -58,14 +58,14 @@
         "submitError": null,
         "addButtonRectAtClick": {
           "x": 16,
-          "y": 744.140625,
+          "y": 744.03125,
           "width": 358,
           "height": 56
         },
         "addButtonScrollTicks": 0,
         "submitRectAtClick": {
           "x": 123.34375,
-          "y": 765.53125,
+          "y": 765.421875,
           "width": 233.65625,
           "height": 55
         },
@@ -80,7 +80,7 @@
         "submitError": null,
         "addButtonRectAtClick": {
           "x": 16,
-          "y": 540.140625,
+          "y": 540.03125,
           "width": 328,
           "height": 56
         },

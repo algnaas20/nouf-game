@@ -1,55 +1,61 @@
 /**
- * The readiness meter (PH-C3) — tells the host what their deck of
- * questions supports, using the deck-band thresholds already built and
- * owned by WL-A (`src/core/rules/deck-bands.ts`, D-09.12/13). This module
- * never reimplements the green/warn/refuse arithmetic — it only imports
- * `deckBand` and `preselectTrackLength` and formats their output.
+ * The readiness meter (PH-C3, rewritten per `addendum-deck-floor-2026-08-
+ * 08.md` §"Editor readiness meter — continuous, three states") — tells the
+ * host what their deck of questions supports AND, critically, how many
+ * more questions the next milestone costs (D-09.21: no refusal without a
+ * number). This module never reimplements the band/threshold arithmetic —
+ * it only imports `deckBand`, `preselectTrackLength`,
+ * `questionsNeededForPlayable` and `questionsNeededForComfortable` from
+ * WL-A's `src/core/rules/deck-bands.ts` and formats their output.
  *
- * ---- Why N=10 is the reference track length --------------------------
+ * ---- How `N` is chosen, and why it is never hardcoded -----------------
  *
- * خطة.md Appendix أ gives two literal example messages (the second shown
- * here after D-09.26's binding vocabulary fix — `addendum-deck-floor-
- * 2026-08-08.md` — which replaces «خطوات» with «محطات» project-wide; the
- * derivation arithmetic below is unaffected, only the trailing word is):
- *   «أسئلتك ٢٦ — تكفي غالباً، وإذا كثرت الأخطاء ممكن تخلص الأسئلة قبل ما يوصل أحد»
- *   «أسئلتك ١٨ — تكفي لمسار ٦ محطات»
- * Both reproduce **exactly** under `deckBand(D, 10)` and nothing else:
- *   deckBand(26, 10): greenThreshold = 3.34*10+4 = 37.4, refuseThreshold = 2*10+2 = 22.
- *     26 < 37.4 and 26 >= 22  ⇒ 'warn'.  ✓ matches the first example.
- *   deckBand(18, 10): 18 < 37.4 and 18 < 22  ⇒ 'refuse'.  ✓ matches the second.
- *   Its fallback "6" matches `preselectTrackLength(18)` exactly: neither
- *   preset ≤10 (6 or 10) is green at D=18 (deckBand(18,6): greenThreshold
- *   3.34*6+4=24.04, refuseThreshold 2*6+2=14; 18<24.04 and 18>=14 ⇒ 'warn',
- *   not green; deckBand(18,10)='refuse' as above) — so `preselectTrackLength`
- *   falls through to its "largest warn-or-better" branch, which is only 6
- *   (10 is refuse), and returns 6.
- * N=10 is also خطة.md's "عادية" (normal) preset — the middle of
- * «قصيرة»/«عادية»/«طويلة» (short/normal/long) — the sensible default to
- * measure against before the host has necessarily chosen a track length.
+ * `N = preselectTrackLength(deckSize)` — the SAME function team-setup uses
+ * to pick a default preset — always returns a real, existing preset from
+ * `PRESETS` (now `[4, 6, 10, 14]`), never an invented number:
+ *   - Below the absolute floor (D < 12, refuse even at the smallest preset
+ *     «سريعة», N=4): `preselectTrackLength` falls through to `PRESETS[0]`,
+ *     which IS 4 now — so `N` is always 4 in the refuse state, giving
+ *     `questionsNeededForPlayable(D, 4)` = `12 − D`, matching the
+ *     addendum's own worked example verbatim: D=9 → «ناقصك 3 أسئلة».
+ *   - Once at least one preset is reachable, `preselectTrackLength` returns
+ *     the LARGEST comfortably-or-warn-supported preset — e.g. D=14 resolves
+ *     to N=4 (warn), matching the addendum's other worked example
+ *     («أسئلتك 14 — تكفي لمسار 4 محطات... زد 7 أسئلة») exactly.
+ * `deckBand(deckSize, N)` on that same `N` then decides which of the three
+ * §7 messages applies, and `questionsNeededForPlayable`/
+ * `questionsNeededForComfortable` (both routed through the identical
+ * `Math.ceil` the band check itself uses, per D-09.24) supply the numbers.
  */
 
-import { deckBand, preselectTrackLength } from '../../core/rules/deck-bands';
+import {
+  deckBand,
+  preselectTrackLength,
+  questionsNeededForComfortable,
+  questionsNeededForPlayable,
+} from '../../core/rules/deck-bands';
 import { deckGreenMessage, deckRefuseMessage, deckWarnMessage } from '../copy';
 import type { DraftStore, DraftState } from '../draft-store';
-
-export const READINESS_REFERENCE_TRACK_LENGTH = 10;
 
 export interface ReadinessResult {
   deckSize: number;
   band: 'green' | 'warn' | 'refuse';
+  trackLength: number;
   message: string;
 }
 
 export function computeReadiness(deckSize: number): ReadinessResult {
-  const band = deckBand(deckSize, READINESS_REFERENCE_TRACK_LENGTH);
+  const trackLength = preselectTrackLength(deckSize);
+  const band = deckBand(deckSize, trackLength);
   if (band === 'green') {
-    return { deckSize, band, message: deckGreenMessage(deckSize) };
+    return { deckSize, band, trackLength, message: deckGreenMessage(deckSize, trackLength) };
   }
   if (band === 'warn') {
-    return { deckSize, band, message: deckWarnMessage(deckSize) };
+    const comfortGap = questionsNeededForComfortable(deckSize, trackLength);
+    return { deckSize, band, trackLength, message: deckWarnMessage(deckSize, trackLength, comfortGap) };
   }
-  const fallback = preselectTrackLength(deckSize);
-  return { deckSize, band, message: deckRefuseMessage(deckSize, fallback) };
+  const playableGap = questionsNeededForPlayable(deckSize, trackLength);
+  return { deckSize, band, trackLength, message: deckRefuseMessage(deckSize, playableGap) };
 }
 
 export function renderReadinessMeter(store: DraftStore): HTMLElement {
