@@ -1,123 +1,120 @@
 /**
- * Pure maze geometry — no DOM here, so it is directly unit-testable and
- * directly inspectable by the "no stations / no token-width opening in a
- * decorative dead end" guard (D-09.6 / constraint row 7), independent of
- * any rendering. `toStageX` below is the SINGLE mirror point (§2.3): every
- * consumer (station placement, the token, the finish marker) calls the
- * same function, so an eventual LTR flip is one line, never scattered sign
- * flips.
+ * Pure maze RENDERING geometry — no DOM here, directly unit-testable.
+ * Supersedes the old congruent-corridor model (D-24, the user's «مو تحط لي
+ * خط» ruling; game-systems-expert 2026-08-08 §10.4 names this file
+ * "replaced... rendering geometry is rtl-stage-ux-expert's / WL-B's to
+ * redesign", with the one binding requirement **M-GEO-1: junction anchors
+ * must be monotone along the travel axis** for both routes, so "further =
+ * ahead" reads at a glance from 3 m).
  *
- * Coordinate space: a unit box, `xFrac` 1 = right edge (البداية) → 0 = left
- * edge (النهاية) — i.e. `xFrac` already reads right-to-left by construction
- * (D-09.6: "the maze starts at the RIGHT edge and advances LEFTWARD").
- * `yFrac` 0 = top, 1 = bottom.
+ * Reading D (§2.1 of the spec): two DISJOINT per-team regions, two entries,
+ * one shared lit goal gate. Team A enters top-right, team B enters
+ * bottom-right (RTL: travel is leftward for both, §2.3). Each team is
+ * confined to its own vertical band for its whole route — the two bands
+ * never overlap — so `cells(A) ∩ cells(B) = {goal}` (M-GEN-1) is true of the
+ * RENDERED geometry too, not just the abstract WL-A data.
+ *
+ * Junction anchor positions are a function of `(team, index, N)` ONLY —
+ * deliberately NOT of `decorSeed`, and not of the game's random seed at all
+ * (sidesteps needing to plumb the raw session seed to the render layer: the
+ * "winding" look is a fixed deterministic wiggle, not a per-game random
+ * one). `tests/stage/maze-fog.test.ts`'s M-FOG-1b mutation proves this file
+ * never lets `decorSeed` influence a junction anchor.
  */
+
+import type { TeamId } from '../contracts';
 
 export interface MazePoint {
   xFrac: number;
   yFrac: number;
 }
 
+export type ExitSlot = 0 | 1 | 2;
+
+/** Fixed vertical bands, in `yFrac` (0 = top, 1 = bottom) — the two teams'
+ *  regions never overlap for the WHOLE route, only converging in the last
+ *  short stretch into the shared goal gate (with a permanent minimum
+ *  offset, §2.5 rule 1: "trails never share a corridor centre-line"). */
+const BAND: Record<TeamId, { center: number; amplitude: number }> = {
+  A: { center: 0.24, amplitude: 0.15 },
+  B: { center: 0.76, amplitude: 0.15 },
+};
+
+/** Entry xFrac (right edge, البداية) and goal xFrac (left edge, النهاية). */
+const ENTRY_XFRAC = 0.94;
+const GOAL_XFRAC = 0.045;
+/** The last-junction-to-goal approach offsets — permanently distinct so the
+ *  two trails never share a centre-line even at their closest point. */
+const GOAL_APPROACH_YFRAC: Record<TeamId, number> = { A: 0.465, B: 0.535 };
+
 /**
- * The corridor's spine — monotonically decreasing `xFrac` (strictly
- * right-to-left) with a vertical wiggle for "winding" character. Both team
- * lanes are translated copies of this exact spine (see `laneOffset`) —
- * translation preserves congruence exactly: the corridor the tokens travel
- * is the SAME shape for both teams (D-09.6, binding art rule 1).
+ * The junction anchor for `team`'s `index`-th junction (`0..N-1`) out of
+ * `N` total. Monotonically decreasing `xFrac` as `index` grows (M-GEO-1) —
+ * asserted directly by `isRouteMonotoneRightToLeft` below. The vertical
+ * wiggle is a FIXED deterministic function of `(team, index)` only — no
+ * RNG, no seed, so no session-specific plumbing is ever needed at the
+ * render layer, and `decorSeed` never enters this computation at all
+ * (M-FOG-1b).
  */
-export const CORRIDOR_SPINE: readonly MazePoint[] = [
-  { xFrac: 0.95, yFrac: 0.5 },
-  { xFrac: 0.8, yFrac: 0.16 },
-  { xFrac: 0.64, yFrac: 0.84 },
-  { xFrac: 0.48, yFrac: 0.16 },
-  { xFrac: 0.32, yFrac: 0.84 },
-  { xFrac: 0.16, yFrac: 0.16 },
-  { xFrac: 0.03, yFrac: 0.5 },
-];
+export function junctionAnchor(team: TeamId, index: number, N: number): MazePoint {
+  const band = BAND[team];
+  const progress = N <= 0 ? 0 : index / N; // 0 = entry, 1 = would be one past the last junction
+  const xFrac = ENTRY_XFRAC - progress * (ENTRY_XFRAC - GOAL_XFRAC - 0.06);
+  const wigglePhase = index * 1.7 + (team === 'A' ? 0 : Math.PI / 3);
+  const yFrac = band.center + Math.sin(wigglePhase) * band.amplitude * 0.5;
+  return { xFrac, yFrac };
+}
 
-/** Assert-friendly: the spine is strictly right-to-left. */
-export function isSpineMonotonicRightToLeft(spine: readonly MazePoint[] = CORRIDOR_SPINE): boolean {
-  for (let i = 1; i < spine.length; i++) {
-    if (spine[i]!.xFrac >= spine[i - 1]!.xFrac) return false;
+/** The shared, always-lit goal gate — one fixed point, both teams converge
+ *  on it (M-FOG-2: visible and lit from frame one, independent of any
+ *  team's progress). */
+export function goalGateAnchor(): MazePoint {
+  return { xFrac: GOAL_XFRAC, yFrac: 0.5 };
+}
+
+/** The point a team's trail approaches the goal gate FROM — offset from the
+ *  gate itself so the two teams' final approach segments never share a
+ *  centre-line (§2.5 rule 1), even though both end at the same gate. */
+export function goalApproachAnchor(team: TeamId): MazePoint {
+  return { xFrac: GOAL_XFRAC + 0.05, yFrac: GOAL_APPROACH_YFRAC[team] };
+}
+
+/** Assert-friendly (I15-adjacent, geometry-layer sanity): strictly
+ *  right-to-left for both teams' full routes. */
+export function isRouteMonotoneRightToLeft(team: TeamId, N: number): boolean {
+  let lastX = Infinity;
+  for (let i = 0; i < N; i++) {
+    const p = junctionAnchor(team, i, N);
+    if (p.xFrac >= lastX) return false;
+    lastX = p.xFrac;
   }
-  return true;
+  const approach = goalApproachAnchor(team);
+  if (approach.xFrac >= lastX) return false;
+  const gate = goalGateAnchor();
+  return gate.xFrac < approach.xFrac;
 }
 
-function segmentLengths(spine: readonly MazePoint[]): number[] {
-  const lens: number[] = [];
-  for (let i = 1; i < spine.length; i++) {
-    const a = spine[i - 1]!;
-    const b = spine[i]!;
-    lens.push(Math.hypot(b.xFrac - a.xFrac, b.yFrac - a.yFrac));
-  }
-  return lens;
+/** Fixed angular offsets for the (up to) 3 exits of a junction, relative to
+ *  the forward (leftward) travel direction — "أعلى" / "وسط" / "أسفل"
+ *  (up/mid/down), a stable convention independent of which exits happen to
+ *  still be open (R-1/R-2 of the UX addendum: same alphabet as the answer
+ *  options, drawn ON the maze at the mouth). */
+const MOUTH_Y_OFFSET: Record<ExitSlot, number> = { 0: -0.05, 1: 0, 2: 0.05 };
+export const EXIT_LETTERS = ['أ', 'ب', 'ج'] as const;
+export const EXIT_DIRECTION_WORDS: Record<ExitSlot, string> = { 0: 'أعلى', 1: 'وسط', 2: 'أسفل' };
+
+/**
+ * The ADJACENT register (§1 table): a short stub, one cell deep, leaving
+ * the team's CURRENT junction toward exit `slot`. This is the only true
+ * topology drawn ahead of where a team has actually walked — everything
+ * beyond it is the DISTANT decorative register (`maze-decor.ts`), which
+ * never reads this function's output or inputs.
+ */
+export function mouthAnchor(team: TeamId, junctionIndex: number, N: number, slot: ExitSlot): MazePoint {
+  const base = junctionAnchor(team, junctionIndex, N);
+  // The next anchor (or the goal, if this is the last junction) gives the
+  // forward direction to project the short stub toward.
+  const forward = junctionIndex + 1 < N ? junctionAnchor(team, junctionIndex + 1, N) : goalApproachAnchor(team);
+  const dx = (forward.xFrac - base.xFrac) * 0.42;
+  return { xFrac: base.xFrac + dx, yFrac: base.yFrac + MOUTH_Y_OFFSET[slot] };
 }
-
-/** Uniform-speed (arclength-parametrized) point at `progress` in [0,1] along
- *  the spine, 0 = start (right, البداية), 1 = end (left, النهاية). */
-export function pointAtProgress(progress: number, spine: readonly MazePoint[] = CORRIDOR_SPINE): MazePoint {
-  const clamped = Math.max(0, Math.min(1, progress));
-  const lens = segmentLengths(spine);
-  const total = lens.reduce((a, b) => a + b, 0);
-  const target = clamped * total;
-  let acc = 0;
-  for (let i = 0; i < lens.length; i++) {
-    const segLen = lens[i]!;
-    if (acc + segLen >= target || i === lens.length - 1) {
-      const segT = segLen === 0 ? 0 : (target - acc) / segLen;
-      const a = spine[i]!;
-      const b = spine[i + 1]!;
-      return { xFrac: a.xFrac + (b.xFrac - a.xFrac) * segT, yFrac: a.yFrac + (b.yFrac - a.yFrac) * segT };
-    }
-    acc += segLen;
-  }
-  return spine[spine.length - 1]!;
-}
-
-export type Lane = 'A' | 'B';
-
-/** Constant vertical translation per lane — a translated copy of the same
- *  spine is exactly congruent (not merely "similar"). */
-const LANE_OFFSET_YFRAC: Record<Lane, number> = { A: -0.055, B: 0.055 };
-
-export function laneOffset(lane: Lane): number {
-  return LANE_OFFSET_YFRAC[lane];
-}
-
-/** The single mirror point (§2.3): every consumer of maze geometry (station
- *  dots, the token, the finish marker) resolves a lane+progress through
- *  this one function. Flipping travel direction later is a change to
- *  `CORRIDOR_SPINE` (or this function), never a sprinkle of sign flips at
- *  call sites. */
-export function toStagePoint(lane: Lane, progress: number): MazePoint {
-  const base = pointAtProgress(progress);
-  return { xFrac: base.xFrac, yFrac: base.yFrac + laneOffset(lane) };
-}
-
-export function stationProgressValues(N: number): number[] {
-  const out: number[] = [];
-  for (let i = 0; i <= N; i++) out.push(i / N);
-  return out;
-}
-
-export interface DecorativeDeadEnd {
-  /** Anchor point on the spine this stub branches from — NOT a station;
-   *  dead ends attach between stations, never coincide with one. */
-  fromProgress: number;
-  /** Direction the stub travels away from the corridor, in yFrac units. */
-  branchYFrac: number;
-}
-
-/** Fixed set of decorative dead ends — anchored at mid-segment progress
- *  values (never at a station progress value, i.e. never at i/N for any
- *  plausible N), so they can never be mistaken for a station by
- *  construction. Exactly zero station markers are ever drawn on these
- *  (constraint row 7) — the renderer never calls the station-drawing code
- *  for anything in this list. */
-export const DECORATIVE_DEAD_ENDS: readonly DecorativeDeadEnd[] = [
-  { fromProgress: 0.12, branchYFrac: -0.22 },
-  { fromProgress: 0.29, branchYFrac: 0.22 },
-  { fromProgress: 0.46, branchYFrac: -0.2 },
-  { fromProgress: 0.63, branchYFrac: 0.2 },
-  { fromProgress: 0.81, branchYFrac: -0.22 },
-];

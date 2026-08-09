@@ -145,6 +145,12 @@ body {
   margin: 0;
   text-align: center;
 }
+/* addendum-maze-ux.md §1.5: route-card label >= 56 stage-px, weight 700. */
+.type-route-card {
+  font-size: calc(var(--size-route-card) * var(--stage-unit) * var(--scale-step));
+  font-weight: 700;
+  line-height: 1.2;
+}
 
 /* ---- Header / status strip ---- */
 
@@ -160,14 +166,33 @@ body {
   align-items: center;
   gap: calc(12 * var(--stage-unit));
 }
+/*
+ * addendum-maze-ux.md §2.4 differentiator 4: "the status-strip team chip
+ * reuses the same token glyph and the same pattern swatch as the maze" —
+ * so the strip is a free legend, costing no extra space. Team A = circle
+ * (matches the maze token's circle), team B = diamond (45deg square,
+ * matches the maze token's diamond) — shape is never colour-only (T-2).
+ */
 .status-team-dot {
-  inline-size: calc(28 * var(--stage-unit));
-  block-size: calc(28 * var(--stage-unit));
-  border-radius: 50%;
+  inline-size: calc(24 * var(--stage-unit));
+  block-size: calc(24 * var(--stage-unit));
   flex: 0 0 auto;
+  box-shadow: 0 0 0 calc(3 * var(--stage-unit)) var(--color-trail-casing);
 }
-.status-team-dot.team-a { background: var(--color-team-a); }
-.status-team-dot.team-b { background: var(--color-team-b); }
+.status-team-dot.team-a {
+  background: var(--color-team-a);
+  border-radius: 50%;
+}
+.status-team-dot.team-b {
+  background: var(--color-team-b);
+  border-radius: calc(4 * var(--stage-unit));
+  transform: rotate(45deg);
+  /* Slightly smaller so the rotated square's diagonal doesn't read larger
+     than team A's circle at a glance. */
+  inline-size: calc(19 * var(--stage-unit));
+  block-size: calc(19 * var(--stage-unit));
+  margin-inline: calc(2.5 * var(--stage-unit));
+}
 
 /* ---- Question area ---- */
 
@@ -303,6 +328,82 @@ body {
 .op-button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+/*
+ * ---- Route action band (game-systems-expert §7 / addendum-maze-ux.md §1) ----
+ * The fixed row of route cards that replaces the plain "next" button on a
+ * REVEALED question screen. V33 (action-band invariance): this band's
+ * height and vertical position never move between a correct-answer beat
+ * (2-3 cards) and a wrong-answer beat (1 card) — only the card count and
+ * labels change, enforced by using the exact same class/flex-flow slot
+ * every time (chrome.ts's `buildOperatorBar` never renders anything else
+ * in this slot once `revealed` is true).
+ */
+.operator-bar.operator-bar-revealed {
+  block-size: calc(160 * var(--stage-unit));
+  align-items: stretch;
+}
+.route-action-band {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  min-inline-size: 0;
+  /* Real, measured overlap found in worklog-B7.md §4's own screenshot: the
+     undo corner (`undo-corner.ts`, `position: absolute`, anchored
+     `inset-inline-end: 96 + min-inline-size 240` stage-px into
+     `.stage-safe`) sat UNDER the inline-end-most route card once the band
+     grew edge-to-edge (unlike the old single ~240px "next" button, which
+     never reached that corner). Reserved space here, not a z-index/opacity
+     hack, so the card is never hidden behind the button either. */
+  padding-inline-end: calc(360 * var(--stage-unit));
+}
+.route-card-row {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  /* addendum §1.5: >= 48 stage-px between cards — separation, not size, is
+     what stops adjacent mis-taps. */
+  gap: calc(48 * var(--stage-unit));
+  inline-size: 100%;
+}
+.route-card {
+  /* addendum §1.5: >= 400 x 140 stage-px. */
+  min-inline-size: calc(400 * var(--stage-unit));
+  min-block-size: calc(140 * var(--stage-unit));
+  border-radius: calc(16 * var(--stage-unit));
+  border: calc(3 * var(--stage-unit)) solid var(--color-text);
+  background: transparent;
+  color: var(--color-text);
+  font-family: inherit;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(8 * var(--stage-unit));
+}
+.route-card.route-card-solo {
+  background: var(--color-text);
+  color: var(--color-bg);
+  border-color: var(--color-text);
+}
+.route-card:disabled {
+  /* Arm delay (V34) — never opacity-only (§7.3 discipline): cursor changes
+     too, matching `.op-button:disabled`'s own pattern. */
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.route-card-letter {
+  font-size: calc(40 * var(--stage-unit) * var(--scale-step));
+  font-weight: 700;
+  inline-size: calc(56 * var(--stage-unit));
+  block-size: calc(56 * var(--stage-unit));
+  border-radius: 50%;
+  border: calc(2 * var(--stage-unit)) solid var(--color-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* ---- Undo corner — same corner on every screen (inline-end, block-end). ---- */
@@ -568,6 +669,16 @@ body {
 .maze-step-card-b { border-color: var(--color-team-b); }
 .maze-step-of { font-variant-numeric: tabular-nums; }
 .maze-step-remaining { opacity: 0.85; }
+.maze-step-stumble-note {
+  color: var(--color-trail-casing);
+  opacity: 0.9;
+}
+/* D-09.28's copy note (§1.6): a dead end is the team's chosen outcome, not
+   an error — reuses `.result-banner`'s layout but never `.is-correct`'s
+   green or `.is-wrong`'s vermilion; casing-coloured, neutral. */
+.result-banner.is-dead-end .type-result-word {
+  color: var(--color-trail-casing);
+}
 
 .maze-wrap {
   flex: 1 1 auto;
@@ -580,24 +691,98 @@ body {
   inline-size: 100%;
   block-size: 100%;
 }
-.maze-lane {
-  fill: none;
-  stroke-width: 5;
+.maze-beat-skippable { cursor: pointer; }
+
+/* ---- DISTANT register — decorative texture, no true topology (M-FOG-1) ---- */
+.maze-decor-wall {
+  stroke: #232833;
+  stroke-width: 3;
+  opacity: 0.55;
 }
-.maze-lane-a { stroke: var(--color-team-a); }
-.maze-lane-b { stroke: var(--color-team-b); stroke-dasharray: 14 10; }
-.maze-station { fill: #2A2F38; stroke: var(--color-text); stroke-width: 1; opacity: 0.7; }
-.maze-station-a { stroke: var(--color-team-a); }
-.maze-station-b { stroke: var(--color-team-b); }
-.maze-dead-end-stub { stroke: #3A4150; stroke-width: 6; fill: none; }
-.maze-dead-end-wall { stroke: var(--color-text); stroke-width: 5; opacity: 0.6; }
+
+/* ---- Goal gate — lit from frame one (M-FOG-2) ---- */
+.maze-goal-glow {
+  fill: var(--color-correct);
+  opacity: 0.18;
+}
+.maze-goal-post {
+  fill: var(--color-correct);
+  opacity: 0.9;
+}
+.maze-goal-label {
+  fill: var(--color-correct);
+}
+
+/* ---- TRAVELLED register — two cased, non-blending trails (T-1..T-5) ---- */
+/* Casing FIRST (wider, near-white, solid) then the team-coloured core on
+   top — 4 stage-px casing on each side, 20 stage-px core: equal widths for
+   both teams (never differentiate by weight, addendum §2.4). Casing lives
+   in the luminance channel, so it survives 4:2:0 chroma subsampling and
+   fixes team B's thin 3.65:1 contrast structurally, not by hue-hunting. */
+.maze-trail-casing {
+  stroke: var(--color-trail-casing);
+  stroke-width: 28;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.maze-trail-core {
+  stroke-width: 20;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.maze-trail-core-a { stroke: var(--color-team-a); }
+/* Differentiator 1 (addendum §2.4): team A solid, team B dashed 28/28. */
+.maze-trail-core-b {
+  stroke: var(--color-team-b);
+  stroke-dasharray: 28 28;
+}
+
 .maze-marker-label {
   fill: var(--color-text);
   font-family: 'Cairo', sans-serif;
   font-weight: 700;
   font-size: 26px;
 }
-.maze-finish-flag { fill: var(--color-correct); stroke: var(--color-correct); }
+
+/* ---- Dead-end stamp — casing-coloured, never a team colour (§2.6) ---- */
+.maze-dead-end-brick {
+  fill: #232833;
+  stroke: var(--color-trail-casing);
+  stroke-width: 3;
+}
+.maze-dead-end-glyph {
+  fill: var(--color-trail-casing);
+  font-family: 'Cairo', sans-serif;
+  font-weight: 700;
+  font-size: 22px;
+}
+.maze-dead-end-label {
+  fill: var(--color-trail-casing);
+  font-family: 'Cairo', sans-serif;
+  font-weight: 700;
+  font-size: 16px;
+}
+
+/* ---- ADJACENT register — open mouths at the active team's junction ---- */
+.maze-mouth-stub {
+  stroke: var(--color-trail-casing);
+  stroke-width: 4;
+  stroke-dasharray: 6 6;
+  opacity: 0.8;
+}
+.maze-mouth-chip-bg {
+  fill: #171B22;
+  stroke: var(--color-text);
+  stroke-width: 2;
+}
+.maze-mouth-chip-letter {
+  fill: var(--color-text);
+  font-family: 'Cairo', sans-serif;
+  font-weight: 700;
+  font-size: 18px;
+}
+
+/* ---- Tokens — distinct silhouettes, never colour alone (T-2) ---- */
 .maze-token {
   transition: transform 600ms ease;
 }
@@ -607,11 +792,21 @@ body {
 }
 .maze-token-a .maze-token-shape { stroke: var(--color-team-a); }
 .maze-token-b .maze-token-shape { stroke: var(--color-team-b); }
+/*
+ * §1.5 differentiator 3: team name at the token >= 44 stage-px. The SVG
+ * viewBox width (MAZE_VIEW_WIDTH=1728) is chosen to equal the safe area's
+ * usable stage-px width, so a viewBox unit is approximately one stage-px
+ * WHEN THE SVG'S WIDTH IS THE BINDING CONSTRAINT under `preserveAspectRatio`
+ * (the default `xMidYMid meet`) — declared, not independently proven for
+ * every viewport (the real, measured number is in
+ * `tests/stage/verify-b7-maze.manual.cjs`'s geometry check, converted
+ * through the SVG's actual CTM, not assumed from this comment).
+ */
 .maze-token-label {
   fill: var(--color-text);
   font-family: 'Cairo', sans-serif;
   font-weight: 700;
-  font-size: 22px;
+  font-size: 46px;
 }
 
 .audience-decision-panel {

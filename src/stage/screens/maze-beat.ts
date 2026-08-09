@@ -1,16 +1,30 @@
-import type { Outcome } from '../../contracts';
+import type { Outcome, TeamId } from '../../contracts';
 import { formatDigits } from '../format-digits';
 import { buildUndoCorner } from '../undo-corner';
 import { buildMazeView } from './maze-view';
 
 export type MazeBeatMode = 'continue' | 'audience-decision' | 'decisive-auto' | 'decisive-manual';
 
+/** What the move that just landed on this beat actually did — computed by
+ *  `app.ts` from the state BEFORE the commit vs. AFTER (never re-derived
+ *  here, which would risk disagreeing with the real reducer). Drives the
+ *  transient «طريق مسدود!» moment — D-09.28, never the wrong-answer
+ *  vocabulary («خطأ» / a red ✗): a dead end is the team's own chosen
+ *  outcome, not an operator error. */
+export interface JustMoved {
+  team: TeamId;
+  result: 'advance' | 'deadEnd' | 'none';
+}
+
 export interface MazeBeatParams {
   N: number;
   positions: [number, number];
+  closedExits: [number[], number[]];
+  wasted: [number, number];
+  decorSeed: number;
   teamNames: [string, string];
   mode: MazeBeatMode;
-  onContinue: () => void;
+  justMoved: JustMoved | null;
   onDeclare: (outcome: Outcome) => void;
   canUndo: boolean;
   onUndo: () => void;
@@ -26,9 +40,19 @@ export interface MazeBeatParams {
    * of arming the timer; a real tap is required to end the game again.
    */
   onConfirmDecisive?: () => void;
+  /**
+   * game-systems-expert 2026-08-08 §7 ("the screen auto-advances to the
+   * next turn"): `'continue'` mode no longer waits for a manual «السؤال
+   * التالي» tap on THIS screen — `app.ts` arms a short auto-advance timer,
+   * matching the existing `'decisive-auto'` pattern, closing the third-tap
+   * gap disclosed in worklog-B7.md §0. This screen stays tappable-anywhere
+   * as an OPTIONAL accelerator (mirrors `turn-handoff.ts`'s own "dissolves,
+   * skippable by a tap" pattern) — never a REQUIRED third tap.
+   */
+  onSkip?: () => void;
 }
 
-function stepCard(teamName: string, position: number, N: number, lane: 'a' | 'b'): HTMLElement {
+function stepCard(teamName: string, position: number, N: number, lane: 'a' | 'b', stumbled: boolean): HTMLElement {
   const card = document.createElement('div');
   card.className = `maze-step-card maze-step-card-${lane}`;
   const name = document.createElement('span');
@@ -39,18 +63,27 @@ function stepCard(teamName: string, position: number, N: number, lane: 'a' | 'b'
   of.textContent = `${formatDigits(position)} من ${formatDigits(N)}`;
   const remaining = document.createElement('span');
   remaining.className = 'type-option maze-step-remaining';
-  remaining.textContent = `بقي ${formatDigits(Math.max(0, N - position))} خطوات`;
+  // D-09.26 (deck-floor addendum, binding): track length is «محطات», never
+  // «خطوات» — a «خطوة» is now a move, and a move can be wasted on a dead end.
+  remaining.textContent = `بقي ${formatDigits(Math.max(0, N - position))} محطات`;
   card.append(name, of, remaining);
+  if (stumbled) {
+    // D-09.28: appears ONLY once the risk has been spent, never before —
+    // and, once true, stays visible on every subsequent beat for this team.
+    const note = document.createElement('span');
+    note.className = 'type-option maze-step-stumble-note';
+    note.textContent = 'باقي مساركم سالك';
+    card.append(note);
+  }
   return card;
 }
 
 /**
  * The maze "beat" (§6.4) — full-stage, shown after every `MOVE_APPLIED`
- * (state `PROGRESSION_APPLIED`), before the next question. Three modes,
- * driven entirely by what `driver.legal()` returned (app.ts's job, never
- * decided here):
- *   'continue' — ordinary play continues; «السؤال التالي» commits the
- *                single `TURN_PASSED` candidate.
+ * (state `PROGRESSION_APPLIED`), before the next question. Modes, driven
+ * entirely by what `driver.legal()` returned (app.ts's job, never decided
+ * here):
+ *   'continue' — ordinary play continues; auto-advances (see `onSkip` doc).
  *   'audience-decision' — D-09.15, deck exhausted & level: three buttons
  *                for the three legal `GAME_ENDED` candidates.
  *   'decisive-auto' — a single `GAME_ENDED` candidate with no room choice
@@ -68,14 +101,35 @@ export function renderMazeBeat(container: HTMLElement, p: MazeBeatParams): void 
   const cards = document.createElement('div');
   cards.className = 'maze-step-cards';
   cards.append(
-    stepCard(p.teamNames[0], p.positions[0], p.N, 'a'),
-    stepCard(p.teamNames[1], p.positions[1], p.N, 'b'),
+    stepCard(p.teamNames[0], p.positions[0], p.N, 'a', p.wasted[0] > 0),
+    stepCard(p.teamNames[1], p.positions[1], p.N, 'b', p.wasted[1] > 0),
   );
   safe.append(cards);
 
+  if (p.justMoved?.result === 'deadEnd') {
+    // D-09.28 / addendum-maze-ux.md §1.6, literal: never «خطأ», never a red
+    // ✗, never the wrong-answer treatment — this is the team's own chosen
+    // outcome, stamped on the board itself (maze-view.ts's dead-end stamp,
+    // same casing colour, never a team colour).
+    const banner = document.createElement('div');
+    banner.className = 'result-banner is-dead-end';
+    const word = document.createElement('span');
+    word.className = 'type-result-word';
+    word.textContent = 'طريق مسدود!';
+    banner.append(word);
+    safe.append(banner);
+  }
+
   const mazeWrap = document.createElement('div');
   mazeWrap.className = 'maze-wrap';
-  const { svg } = buildMazeView({ N: p.N, positions: p.positions, teamNames: p.teamNames });
+  const { svg } = buildMazeView({
+    N: p.N,
+    positions: p.positions,
+    closedExits: p.closedExits,
+    wasted: p.wasted,
+    decorSeed: p.decorSeed,
+    teamNames: p.teamNames,
+  });
   mazeWrap.append(svg);
   safe.append(mazeWrap);
 
@@ -110,31 +164,32 @@ export function renderMazeBeat(container: HTMLElement, p: MazeBeatParams): void 
     buttons.append(btnA, btnB, btnDraw);
     panel.append(buttons);
     safe.append(panel);
-  } else {
+  } else if (p.mode === 'decisive-manual') {
     const bar = document.createElement('div');
     bar.className = 'operator-bar';
     const barEnd = document.createElement('div');
     barEnd.className = 'operator-bar-end';
-    if (p.mode === 'continue') {
-      const nextBtn = document.createElement('button');
-      nextBtn.type = 'button';
-      nextBtn.className = 'op-button primary type-operator-button';
-      nextBtn.textContent = 'السؤال التالي';
-      nextBtn.addEventListener('click', p.onContinue);
-      barEnd.append(nextBtn);
-    } else if (p.mode === 'decisive-manual') {
-      // Composed — reuses the app's existing generic "proceed" register
-      // (§4.7's «اضغط للمتابعة»), not a literal Appendix أ string for this
-      // exact moment (none exists). Disclosed in worklog-B5.md.
-      const confirmBtn = document.createElement('button');
-      confirmBtn.type = 'button';
-      confirmBtn.className = 'op-button primary type-operator-button';
-      confirmBtn.textContent = 'متابعة';
-      confirmBtn.addEventListener('click', () => p.onConfirmDecisive?.());
-      barEnd.append(confirmBtn);
-    }
+    // Composed — reuses the app's existing generic "proceed" register
+    // (§4.7's «اضغط للمتابعة»), not a literal Appendix أ string for this
+    // exact moment (none exists). Disclosed in worklog-B5.md.
+    const confirmBtn = document.createElement('button');
+    confirmBtn.type = 'button';
+    confirmBtn.className = 'op-button primary type-operator-button';
+    confirmBtn.textContent = 'متابعة';
+    confirmBtn.addEventListener('click', () => p.onConfirmDecisive?.());
+    barEnd.append(confirmBtn);
     bar.append(barEnd);
     safe.append(bar);
+  } else if (p.mode === 'continue' && p.onSkip) {
+    // No button — auto-advances (app.ts arms the timer). Tappable anywhere
+    // as an optional accelerator, same pattern as `turn-handoff.ts` —
+    // EXCEPT the undo corner, which must keep its own independent meaning
+    // (a bubbled click from that button must never also fire the skip).
+    safe.classList.add('maze-beat-skippable');
+    safe.addEventListener('click', (e) => {
+      if ((e.target as HTMLElement).closest('.undo-corner')) return;
+      p.onSkip?.();
+    });
   }
 
   safe.append(buildUndoCorner(p.canUndo, p.onUndo));

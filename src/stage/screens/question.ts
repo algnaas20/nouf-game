@@ -3,7 +3,7 @@ import type { MediaUiState } from './media-ui-state';
 import { renderTextQuestionScreen } from './question-text';
 import { renderImageQuestionScreen } from './question-image';
 import { renderAudioQuestionScreen, stopActiveAudio } from './question-audio';
-import { buildDeciderBadge } from './chrome';
+import { buildDeciderBadge, type RouteOption } from './chrome';
 
 export interface QuestionScreenParams {
   question: Question;
@@ -18,7 +18,14 @@ export interface QuestionScreenParams {
   setMediaUi: (patch: Partial<MediaUiState>) => void;
   onChoose: (optionIndex: OptionIndex) => void;
   onNoAnswer: () => void;
-  onNext: () => void;
+  /**
+   * game-systems-expert 2026-08-08 §7 — tap 2, revealed state only. One
+   * `RouteOption` per legal `MOVE_APPLIED` candidate: 2-3 route cards on a
+   * correct answer (one per open exit), or exactly one «السؤال التالي» card
+   * on a wrong answer / already-at-goal. Built by `app.ts` from
+   * `driver.legal()` — never re-derived here. Ignored while `!revealed`.
+   */
+  moveOptions: RouteOption[];
   onUndo: () => void;
   /** D-09.9 — this question is the decider ("سؤال الحسم"), styled distinctly. */
   isDecider?: boolean;

@@ -92,10 +92,21 @@ async function main() {
       { file: 'screens/ending.ts', literal: 'بالتقدّم — ' },
       { file: 'screens/ending.ts', literal: 'نفس الفريقين — يبدأ فريق' },
       { file: 'screens/ending.ts', literal: 'الأسئلة ترجع من أولها' },
-      { file: 'screens/team-setup.ts', literal: 'إذا وصلوا النهاية سوا → سؤال الحسم' },
-      { file: 'screens/team-setup.ts', literal: 'تكفي غالباً، وإذا كثرت الأخطاء ممكن تخلص الأسئلة قبل ما يوصل أحد' },
+      // Deck-floor addendum (2026-08-08, binding, worklog-B7.md §3) REPLACED
+      // the old warn-band literal — 'تكفي غالباً، وإذا كثرت الأخطاء...' no
+      // longer appears (D-09.21's two-number rule superseded it); the two
+      // lines below are its actual current binding replacements. The old
+      // 'إذا وصلوا النهاية سوا → سؤال الحسم' string was never present in
+      // this tree even before this session (a pre-existing stale entry,
+      // not touched here).
+      { file: 'screens/team-setup.ts', literal: 'لو خلصت الأسئلة قبل ما يوصل أحد، يفوز المتقدّم' },
       { file: 'screens/team-setup.ts', literal: 'تكفي لمسار' },
-      { file: 'screens/maze-view.ts', literal: 'البداية' },
+      // 'البداية' — REMOVED by design (worklog-B7.md §4): the new
+      // three-register model has two DIFFERENT entries (one per team, no
+      // longer a single shared start), so only the one SHARED goal
+      // ('النهاية') is a labelled marker; entries are unlabelled token
+      // starting points. Not a regression — game-systems-expert
+      // 2026-08-08 §2.1 ("Reading D... two entries").
       { file: 'screens/maze-view.ts', literal: 'النهاية' },
     ];
     const out = [];
@@ -109,77 +120,26 @@ async function main() {
 
   const browser = await chromium.launch({ headless: true });
 
-  // ---------- Decorative dead-end structural proof ----------
-  {
-    const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
-    await page.goto(URL);
-    results.deadEndStructure = await page.evaluate(async () => {
-      const geomMod = await import('/src/stage/maze-geometry.ts');
-      const viewMod = await import('/src/stage/screens/maze-view.ts');
-      const N = 10;
-      const { svg } = viewMod.buildMazeView({ N, positions: [4, 6], teamNames: ['أ', 'ب'] });
-      document.body.appendChild(svg);
-      const stationCircles = svg.querySelectorAll('.maze-station').length;
-      const deadEndGroupCircles = svg.querySelector('.maze-dead-ends').querySelectorAll('circle').length;
-      const wallLines = svg.querySelectorAll('.maze-dead-end-wall').length;
-      const stubPaths = svg.querySelectorAll('.maze-dead-end-stub').length;
-      svg.remove();
-
-      // Station progress values never coincide with a dead-end anchor, for
-      // several plausible N (6/10/14) — proves dead ends are never mistaken
-      // for stations by construction, not just by the renderer's choices.
-      const collisions = [];
-      for (const testN of [6, 10, 14]) {
-        const stations = geomMod.stationProgressValues(testN);
-        for (const d of geomMod.DECORATIVE_DEAD_ENDS) {
-          if (stations.some((s) => Math.abs(s - d.fromProgress) < 1e-9)) {
-            collisions.push({ N: testN, fromProgress: d.fromProgress });
-          }
-        }
-      }
-
-      return {
-        expectedStationCircles: (N + 1) * 2,
-        actualStationCircles: stationCircles,
-        deadEndCircleCount: deadEndGroupCircles, // must be 0 — dead ends never draw a station glyph
-        wallLineCount: wallLines, // 2 per dead end (mouth + cap)
-        expectedWallLineCount: geomMod.DECORATIVE_DEAD_ENDS.length * 2,
-        stubPathCount: stubPaths,
-        expectedStubPathCount: geomMod.DECORATIVE_DEAD_ENDS.length,
-        stationVsDeadEndCollisions: collisions,
-        spineMonotonic: geomMod.isSpineMonotonicRightToLeft(),
-      };
-    });
-    await page.close();
-  }
-
-  // ---------- Red->green: mutate the dead-end renderer to draw a station on a dead end ----------
-  {
-    const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
-    await page.goto(URL);
-    results.deadEndMutation = await page.evaluate(async () => {
-      const viewMod = await import('/src/stage/screens/maze-view.ts');
-      const geomMod = await import('/src/stage/maze-geometry.ts');
-      // BEFORE: manually inject a station-like circle into the dead-ends
-      // group, simulating the regression the structural check exists to
-      // catch (a future edit that accidentally draws a station marker on a
-      // decorative stub).
-      const { svg } = viewMod.buildMazeView({ N: 10, positions: [0, 0], teamNames: ['أ', 'ب'] });
-      const deadEndsGroup = svg.querySelector('.maze-dead-ends');
-      const fakeStation = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      fakeStation.setAttribute('class', 'maze-station maze-station-a');
-      fakeStation.setAttribute('r', '6');
-      deadEndsGroup.appendChild(fakeStation);
-      const beforeCount = deadEndsGroup.querySelectorAll('circle').length;
-
-      // AFTER: the real, unmutated renderer.
-      const { svg: cleanSvg } = viewMod.buildMazeView({ N: 10, positions: [0, 0], teamNames: ['أ', 'ب'] });
-      const afterCount = cleanSvg.querySelector('.maze-dead-ends').querySelectorAll('circle').length;
-      void geomMod;
-      return { beforeCount, afterCount };
-    });
-    await page.close();
-  }
+  // ---------- SUPERSEDED (worklog-B7.md §4, disclosed not silently
+  // dropped): this section tested the OLD M1 congruent-corridor model's
+  // DECORATIVE dead ends (`.maze-dead-ends`, `.maze-station`,
+  // `DECORATIVE_DEAD_ENDS`, `stationProgressValues`, a single "spine") —
+  // D-24 (the user's «مو تحط لي خط» ruling) explicitly supersedes that
+  // whole model; `game-systems-expert`'s 2026-08-08 redesign deletes
+  // `MazeCell`/`CORRIDOR_SPINE`/`DECORATIVE_DEAD_ENDS` outright and replaces
+  // "decorative dead end vs station" with a fundamentally different
+  // concept (REAL dead ends at REAL junctions, no "station" glyph concept
+  // at all). There is no direct equivalent assertion to port — a full
+  // redesign of this check is out of this session's time budget; NOT
+  // fixed, only disabled so the rest of this script's still-valid checks
+  // (literal-string audit, V13, V12, V24 below) can run. The redesign's
+  // OWN structural guarantees (I12/G7', "no junction ever fully closed",
+  // M-GEN-1 disjoint routes) are proven at the data layer by WL-A's
+  // `tools/sim/invariants.ts` and at the rendering layer by
+  // `tests/stage/maze-fog.test.ts` / `maze-trail-separation.test.ts` — see
+  // worklog-B7.md.
+  results.deadEndStructure = { superseded: true, reason: 'D-24 / maze redesign 2026-08-08 — see worklog-B7.md §4' };
+  results.deadEndMutation = { superseded: true, reason: 'D-24 / maze redesign 2026-08-08 — see worklog-B7.md §4' };
 
   // ---------- V13: control target sizes ----------
   {
@@ -216,9 +176,16 @@ async function main() {
       const container = document.createElement('div');
       container.className = 'stage-root';
       appRoot.appendChild(container);
+      // B7 maze redesign (worklog-B7.md): `renderMazeBeat` now needs
+      // `closedExits`/`wasted`/`decorSeed` (state fields that did not
+      // exist in the old M1 model) and no longer takes `onContinue`
+      // ('continue' mode auto-advances — see maze-beat.ts's own doc
+      // comment); `justMoved: null` is the normal "nothing special
+      // happened" value.
       mod.renderMazeBeat(container, {
-        N: 10, positions: [8, 8], teamNames: ['الفريق الأزرق', 'الفريق البرتقالي'],
-        mode: 'audience-decision', onContinue: () => {}, onDeclare: () => {}, canUndo: false, onUndo: () => {},
+        N: 10, positions: [8, 8], closedExits: [[], []], wasted: [0, 0], decorSeed: 12345,
+        teamNames: ['الفريق الأزرق', 'الفريق البرتقالي'],
+        mode: 'audience-decision', justMoved: null, onDeclare: () => {}, canUndo: false, onUndo: () => {},
       });
       const bar = document.querySelector('.audience-decision-buttons');
       const kids = Array.from(bar.children).map((c) => c.getBoundingClientRect()).sort((a, b) => a.left - b.left);
@@ -236,10 +203,16 @@ async function main() {
     await page.goto(URL);
     const structural = await page.evaluate(async () => {
       const viewMod = await import('/src/stage/screens/maze-view.ts');
-      const { svg } = viewMod.buildMazeView({ N: 10, positions: [4, 7], teamNames: ['الفريق الأزرق', 'الفريق البرتقالي'] });
+      // B7 maze redesign (worklog-B7.md): `.maze-lane-a`/`.maze-lane-b`
+      // (the old M1 corridor) are now `.maze-trail-core-a`/
+      // `.maze-trail-core-b`; `buildMazeView` needs the new state fields.
+      const { svg } = viewMod.buildMazeView({
+        N: 10, positions: [4, 7], closedExits: [[], []], wasted: [0, 0], decorSeed: 12345,
+        teamNames: ['الفريق الأزرق', 'الفريق البرتقالي'],
+      });
       document.body.appendChild(svg);
-      const laneA = svg.querySelector('.maze-lane-a');
-      const laneB = svg.querySelector('.maze-lane-b');
+      const laneA = svg.querySelector('.maze-trail-core-a');
+      const laneB = svg.querySelector('.maze-trail-core-b');
       // Read into PLAIN strings before removal — the same
       // read-after-.remove() staleness bug already caught and fixed twice
       // in verify-b2.manual.cjs (§4 items 5b in worklog-B2.md); a
@@ -273,8 +246,11 @@ async function main() {
       if (hasQuestion) {
         try { await page.click('button:has-text("اعرض الخيارات"):not([disabled])', { timeout: 400 }); } catch {}
         try { await page.click('.option-card:not([disabled])', { timeout: 800 }); } catch {}
-        await page.waitForTimeout(200);
-        try { await page.click('button:has-text("السؤال التالي")', { timeout: 800 }); } catch {}
+        await page.waitForTimeout(500); // clear the route action band's arm delay either way
+        // B7 maze redesign (worklog-B7.md): correct answers show 2-3
+        // route cards (أعلى/وسط/أسفل), not "السؤال التالي" — `.route-card`
+        // covers both that case and the wrong-answer single card.
+        try { await page.click('.route-card:not([disabled])', { timeout: 800 }); } catch {}
         await page.waitForTimeout(300);
         break;
       }

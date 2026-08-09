@@ -2,13 +2,25 @@ import type { GameEvent, Question, TeamId } from '../contracts';
 import { renderHomeScreen } from './screens/home';
 import { renderTeamSetupScreen } from './screens/team-setup';
 import { renderQuestionScreen } from './screens/question';
-import { renderMazeBeat, type MazeBeatMode } from './screens/maze-beat';
+import { renderMazeBeat, type MazeBeatMode, type JustMoved } from './screens/maze-beat';
 import { renderTurnHandoff, type HandoffKind } from './screens/turn-handoff';
 import { renderEndingScreen, computeNextFirstTeam } from './screens/ending';
 import { renderResumePromptScreen, renderDeckMismatchScreen } from './screens/resume-prompt';
 import { initialMediaUiState, type MediaUiState } from './screens/media-ui-state';
 import { resetAutoplayTracking } from './screens/question-audio';
-import { GameDriver, findAnswerChosen, findNoAnswer, findMoveApplied, findTurnPassed, findGameEnded, findQuestionShown, isAudienceDecision, isDecisiveEnding } from './session/game-driver';
+import type { RouteOption } from './screens/chrome';
+import { EXIT_LETTERS, EXIT_DIRECTION_WORDS, type ExitSlot } from './maze-geometry';
+import {
+  GameDriver,
+  findAnswerChosen,
+  findNoAnswer,
+  findAllMoveApplied,
+  findTurnPassed,
+  findGameEnded,
+  findQuestionShown,
+  isAudienceDecision,
+  isDecisiveEnding,
+} from './session/game-driver';
 import { computeDeckHash } from './session/deck-hash';
 // WL-C's own doc comment on `mountEditor` names this exact import as the
 // intended integration point (خطة.md §5.4 — "same app, its own screen,
@@ -150,6 +162,16 @@ export function mountApp(root: HTMLElement): void {
     let mediaUi: MediaUiState = initialMediaUiState();
     let lastUiQuestionId: string | null = null;
     let decisiveTimer: ReturnType<typeof setTimeout> | null = null;
+    // game-systems-expert 2026-08-08 §7 ("the screen auto-advances to the
+    // next turn"): 'continue' mode on the maze beat no longer waits for a
+    // manual tap — mirrors `decisiveTimer`'s own existing pattern.
+    let continueTimer: ReturnType<typeof setTimeout> | null = null;
+    // Set by a route-card `onSelect` (below) immediately before `render()`,
+    // consumed once at the top of the very next `render()` pass (same
+    // pattern as `suppressDecisiveAuto`) — tells the maze beat what the
+    // move that just landed actually did, for the transient «طريق مسدود!»
+    // moment (D-09.28). Never re-derived inside `maze-beat.ts` itself.
+    let justMoved: JustMoved | null = null;
     let cancelHandoff: (() => void) | null = null;
     // F-4 fix (adversarial review, 2026-08-08 — worklog-B5.md §F4): set
     // immediately before `driver.undo(); render();` at every undo call
@@ -228,13 +250,58 @@ export function mountApp(root: HTMLElement): void {
       render();
     }
 
+    /** Shared by 'continue' mode's auto-advance timer AND the optional tap-
+     *  anywhere-to-skip accelerator (`maze-beat.ts`'s `onSkip`) — one code
+     *  path, matching `commitDecisive`'s own discipline. */
+    function commitContinue(): void {
+      const ev = findTurnPassed(driver.legal());
+      if (ev) driver.commit(ev);
+      render();
+    }
+
+    /**
+     * The single place a route/advance `MOVE_APPLIED` candidate is
+     * committed from (both the 2-3-card correct-answer case and the
+     * 1-card wrong-answer case) — records `justMoved` from a real
+     * before/after comparison of `driver.state`, never guessed from the
+     * event shape alone (a dead end and a normal advance are BOTH
+     * `exit !== null`; only the resulting `wasted`/`positions` delta tells
+     * them apart).
+     */
+    function commitMove(ev: GameEvent): void {
+      if (ev.type !== 'MOVE_APPLIED') return;
+      const idx = ev.team === 'A' ? 0 : 1;
+      const prevWasted = driver.state.wasted[idx];
+      const prevPosition = driver.state.positions[idx];
+      const applied = driver.commit(ev);
+      if (applied) {
+        const newWasted = driver.state.wasted[idx];
+        const newPosition = driver.state.positions[idx];
+        justMoved =
+          ev.exit === null
+            ? { team: ev.team, result: 'none' }
+            : newWasted > (prevWasted ?? 0)
+              ? { team: ev.team, result: 'deadEnd' }
+              : newPosition > (prevPosition ?? 0)
+                ? { team: ev.team, result: 'advance' }
+                : { team: ev.team, result: 'none' };
+      }
+      render();
+    }
+
     function render(): void {
       const justUndone = suppressDecisiveAuto;
       suppressDecisiveAuto = false;
+      const justMovedNow = justMoved;
+      justMoved = null;
 
       if (decisiveTimer !== null) {
         clearTimeout(decisiveTimer);
         decisiveTimer = null;
+      }
+      if (continueTimer !== null) {
+        clearTimeout(continueTimer);
+        continueTimer = null;
       }
       if (cancelHandoff) {
         cancelHandoff();
@@ -416,13 +483,32 @@ export function mountApp(root: HTMLElement): void {
 
       if (state.stateId === 'FINISHED') {
         const outcome = state.outcome ?? 'draw';
+        // game-systems-expert §6.3 amendment — computed from state, never
+        // re-derived by ending.ts (see ending.ts's own `EndReason` doc
+        // comment). `correct[t] = positions[t] + wasted[t]` is exact here
+        // (Theorem 2, §6.2 — holds while `positions[t] < N`, which is true
+        // in every branch below except 'track'). Positions-equal AND
+        // correct-equal is the audience-decision path (D-09.15) — the room
+        // chose the winner directly, so it gets the same plain "فاز فريق
+        // ⟨أ⟩" headline as a track win rather than a manufactured "نفس
+        // المحطة" claim that would be untrue (correct counts really ARE
+        // equal there, not "more").
         const reachedEnd = state.positions[0] >= state.N || state.positions[1] >= state.N;
+        const correctA = state.positions[0] + state.wasted[0];
+        const correctB = state.positions[1] + state.wasted[1];
+        const endReason: 'track' | 'progress' | 'stations' = reachedEnd
+          ? 'track'
+          : state.positions[0] !== state.positions[1]
+            ? 'progress'
+            : correctA !== correctB
+              ? 'stations'
+              : 'track';
         renderEndingScreen(wrap, {
           teamNames: state.teamNames,
           positions: state.positions,
           N: state.N,
           outcome,
-          reachedEnd,
+          endReason,
           nextFirstTeam: computeNextFirstTeam(outcome, state.firstTeam),
           canUndo: driver.canUndo(),
           onNewGame: () => {
@@ -483,6 +569,29 @@ export function mountApp(root: HTMLElement): void {
         // at N (only true once inside the tiebreak; MOVE_APPLIED only ever
         // clamps upward there, never below N again).
         const isDecider = state.positions[0] >= state.N && state.positions[1] >= state.N;
+
+        // game-systems-expert 2026-08-08 §7 / addendum-maze-ux.md §1 — the
+        // route action band. One `RouteOption` per legal `MOVE_APPLIED`
+        // candidate: `driver.legal()` already returns 2-3 candidates (one
+        // per open exit) on a correct answer, or exactly one (`exit: null`)
+        // on a wrong answer / already-at-goal — never re-derived here, only
+        // labelled. Built fresh on every render so `revealed === false`
+        // simply gets an empty array (chrome.ts ignores it pre-reveal).
+        const moveOptions: RouteOption[] = revealed
+          ? findAllMoveApplied(driver.legal()).map((ev) => {
+              if (ev.exit === null) {
+                return { key: 'next', label: 'السؤال التالي', onSelect: () => commitMove(ev) };
+              }
+              const slot = ev.exit as ExitSlot;
+              return {
+                key: String(ev.exit),
+                letterChip: EXIT_LETTERS[slot],
+                label: EXIT_DIRECTION_WORDS[slot],
+                onSelect: () => commitMove(ev),
+              };
+            })
+          : [];
+
         renderQuestionScreen(wrap, {
           question,
           optionOrder: state.optionOrder,
@@ -506,11 +615,7 @@ export function mountApp(root: HTMLElement): void {
             if (ev) driver.commit(ev);
             render();
           },
-          onNext: () => {
-            const ev = findMoveApplied(driver.legal());
-            if (ev) driver.commit(ev);
-            render();
-          },
+          moveOptions,
           onUndo: () => {
             suppressDecisiveAuto = true;
             driver.undo();
@@ -529,14 +634,13 @@ export function mountApp(root: HTMLElement): void {
         renderMazeBeat(wrap, {
           N: state.N,
           positions: state.positions,
+          closedExits: state.closedExits,
+          wasted: state.wasted,
+          decorSeed: state.maze.decorSeed,
           teamNames: state.teamNames,
           mode,
+          justMoved: justMovedNow,
           canUndo: driver.canUndo(),
-          onContinue: () => {
-            const ev = findTurnPassed(driver.legal());
-            if (ev) driver.commit(ev);
-            render();
-          },
           onDeclare: (outcome) => {
             const ev = findGameEnded(driver.legal(), outcome);
             if (ev) driver.commit(ev);
@@ -548,6 +652,7 @@ export function mountApp(root: HTMLElement): void {
             driver.undo();
             render();
           },
+          onSkip: mode === 'continue' ? commitContinue : undefined,
         });
 
         if (mode === 'decisive-auto') {
@@ -555,6 +660,19 @@ export function mountApp(root: HTMLElement): void {
             decisiveTimer = null;
             commitDecisive();
           }, 900);
+        } else if (mode === 'continue') {
+          // game-systems-expert §7: auto-advances — no manual tap required
+          // (worklog-B7.md §0 discloses the pre-B7 code needed a third tap
+          // here; this closes that gap). 1200ms: long enough to read the
+          // «طريق مسدود!» transient moment when it fires, matching the
+          // existing 900ms decisive-auto pace plus headroom for that banner
+          // — a chosen value, not independently measured against real
+          // majlis pacing (same disclosed-estimate status as the existing
+          // 900ms figure).
+          continueTimer = setTimeout(() => {
+            continueTimer = null;
+            commitContinue();
+          }, 1200);
         }
         return;
       }

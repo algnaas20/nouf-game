@@ -1,4 +1,12 @@
-import { deckBand, maxGreenTrackLength, preselectTrackLength, type TrackPreset } from '../../core/rules/deck-bands';
+import {
+  deckBand,
+  maxGreenTrackLength,
+  preselectTrackLength,
+  questionsNeededForPlayable,
+  questionsNeededForComfortable,
+  PRESETS,
+  type TrackPreset,
+} from '../../core/rules/deck-bands';
 import { formatDigits } from '../format-digits';
 
 export interface TeamSetupParams {
@@ -13,11 +21,27 @@ export interface TeamSetupParams {
   onBack: () => void;
 }
 
-const PRESETS: { n: TrackPreset; label: string }[] = [
-  { n: 6, label: 'قصيرة' },
-  { n: 10, label: 'عادية' },
-  { n: 14, label: 'طويلة' },
-];
+/** D-09.12′ (play-experience-advisor, addendum-deck-floor-2026-08-08.md):
+ *  presets are `PRESETS` (imported from core, `[4, 6, 10, 14]`) — «سريعة»
+ *  is always visible, never re-derived here. Labels are this screen's own
+ *  (copy, not threshold math). */
+const PRESET_LABELS: Record<TrackPreset, string> = {
+  4: 'سريعة',
+  6: 'قصيرة',
+  10: 'عادية',
+  14: 'طويلة',
+};
+
+/**
+ * D-09.25, literal, no improvisation: Arabic count agreement for "N more
+ * questions". Arabic-Indic digits via `formatDigits`.
+ */
+function phrase(n: number): string {
+  if (n === 1) return 'سؤال واحد';
+  if (n === 2) return 'سؤالان';
+  if (n >= 3 && n <= 10) return `${formatDigits(n)} أسئلة`;
+  return `${formatDigits(n)} سؤالاً`;
+}
 
 /**
  * The minimum screen needed to reach a real `GAME_STARTED` event — not a
@@ -27,44 +51,20 @@ const PRESETS: { n: TrackPreset; label: string }[] = [
  * (D-09.12/13, from the REAL `src/core/rules/deck-bands.ts`, never a
  * re-derived threshold) and the readiness gate below.
  *
- * **Tier 2, not Tier 1 (2026-08-08, worklog-B6.md, `rtl-stage-ux-expert`'s
- * `addendum-small-screens-2026-08-08.md`):** this screen used to be built
- * on the fixed 1920x1080 `--stage-unit` canvas (`.stage-safe`), which
- * `overflow: hidden`s anything past 1080 stage-px with no scroll — the
- * exact live-user defect ("ما فيه زر ولا شي", 2026-08-08). The expert's
- * ruling: *"a surface may be fixed-canvas only if its content is bounded by
- * construction. Any surface whose height depends on user data, form
- * fields, lists, or prose must be an ordinary scrolling document."* Two
- * typed team names and a variable-length readiness message are exactly
- * that, so this screen is now a normal scrolling document on the
- * close-viewing CSS-px scale (`src/styles/console.css`), mounted by
- * `app.ts` OUTSIDE `.stage-root` (same sibling pattern the editor shell
- * already uses) — never `--stage-unit`, never `position: fixed`. The
- * primary «ابدأ» action is additionally a sticky footer bar
- * (`.console-action-bar`), so it is reachable at every viewport
- * UNCONDITIONALLY, independent of how tall the content above it is — the
- * addendum's own fix #1, "the change to ship first".
+ * **Tier 2, not Tier 1** (worklog-B6.md, `rtl-stage-ux-expert`'s
+ * `addendum-small-screens-2026-08-08.md`) — a normal scrolling document on
+ * the close-viewing CSS-px scale (`src/styles/console.css`), with a sticky
+ * footer «ابدأ» action bar reachable unconditionally. Unchanged this
+ * session.
  *
- * **Readiness gate (adversarial review F-2/F-3, 2026-08-08, worklog-B5.md):**
- * this screen is the one and only place `GAME_STARTED` gets constructed
- * (`onConfirm` -> `app.ts#startNewGame`), so it is also the one and only
- * place that must refuse to start a game the deck cannot support — refusing
- * here, in plain Arabic, before the majlis, is strictly cheaper than
- * discovering it at question 20 in front of ten people, or — in the empty-
- * or tiny-deck case — freezing on the very first turn-handoff with no undo
- * and no way out at all.
- *
- * **Not yet folded in (disclosed, worklog-B6.md):** `play-experience-advisor`'s
- * `addendum-deck-floor-2026-08-08.md` (a fourth «سريعة» preset, per-chip
- * price sublines, two-number refuse/warn copy) depends on a `PRESETS`
- * change and an `N -> N+1` threshold shift in `src/core/rules/deck-bands.ts`
- * — core-domain, owned by WL-A, not landed in this tree as of this session.
- * Wiring it in once it lands is a small, contained change (this file's
- * `PRESETS` array plus the two band-line branches below), deliberately not
- * re-derived here ahead of time to avoid shipping a number the shipped
- * threshold math cannot actually back up. The one INDEPENDENT correction
- * from that same addendum — «محطات» never «خطوات» for track length — is
- * applied below; it needs no core change.
+ * **Deck-floor addendum, folded in this session** (D-09.12′…D-09.28,
+ * `addendum-deck-floor-2026-08-08.md`, WL-A's A5 landed the core half —
+ * `PRESETS=[4,6,10,14]`, `N->N+1` thresholds, `questionsNeededForPlayable`/
+ * `questionsNeededForComfortable`): the fourth «سريعة» preset (N=4), the
+ * two-number refuse/warn copy, and the per-chip «ناقصك ⟨…⟩» price sublines
+ * — all reading the SAME threshold functions `deckBand` itself compares
+ * against, never a re-derived number (D-09.24: "a message whose Nth
+ * question does not flip the band is worse than none").
  */
 export function renderTeamSetupScreen(container: HTMLElement, p: TeamSetupParams): void {
   container.innerHTML = '';
@@ -93,13 +93,9 @@ export function renderTeamSetupScreen(container: HTMLElement, p: TeamSetupParams
   const nameA = document.createElement('input');
   nameA.type = 'text';
   nameA.dir = 'auto';
-  // `console-input` only — NOT the legacy `team-name-input` class: that
-  // class still carries `stage.css`'s own `--stage-unit`-scaled
-  // `inline-size: calc(600 * var(--stage-unit))` (resolves to a hard
-  // 600px at unit=1), which silently overrode this Tier-2 grid's own
-  // sizing (found live via computed-style check, worklog-B6.md — the
-  // exact `--stage-unit` leakage this Tier split is supposed to prevent,
-  // reintroduced by a stale shared class name rather than a stylesheet).
+  // `console-input` only — NOT the legacy `team-name-input` class (see
+  // worklog-B6.md §5 for why: a stale `--stage-unit`-scaled class leaked a
+  // hard 600px width into this Tier-2 grid).
   nameA.className = 'console-input';
   nameA.value = 'الفريق الأزرق';
   nameA.maxLength = 18;
@@ -143,6 +139,7 @@ export function renderTeamSetupScreen(container: HTMLElement, p: TeamSetupParams
   trackRow.append(trackLabel, chipRow);
 
   const chips: HTMLButtonElement[] = [];
+  const chipSubs: HTMLElement[] = [];
   const bandLine = document.createElement('p');
   bandLine.className = 'console-readiness-line deck-band-line';
 
@@ -157,46 +154,68 @@ export function renderTeamSetupScreen(container: HTMLElement, p: TeamSetupParams
     p.onConfirm({ teamNames: [a, b], N: selectedN });
   });
 
-  const smallestPreset = PRESETS[0]!.n;
+  const smallestPreset = PRESETS[0];
+
+  function chipSubline(band: ReturnType<typeof deckBand>, preset: TrackPreset): string {
+    if (band === 'green') return 'تكفي بارتياح';
+    if (band === 'warn') return 'تكفي غالباً';
+    // refuse — D-09.23: the chip is a price, not a dead grey button.
+    return `ناقصك ${phrase(questionsNeededForPlayable(p.deckSize, preset))}`;
+  }
 
   /**
-   * F-3 fix (adversarial review, 2026-08-08): the refuse-band branch used to
-   * substitute `selectedN` — the exact track length that was JUST refused —
-   * so the sentence read as if the refused length were sufficient. It now
-   * substitutes `maxGreenTrackLength(deckSize)` (already exported by
-   * `deck-bands.ts`, never re-derived here): the largest track this exact
-   * deck can carry with the green-band's own safety margin, i.e. a number
-   * that is actually true. When that number is smaller than the shortest
-   * offered preset (6), no preset can be offered honestly — the deck is
-   * refused for every track — so the "ابدأ" control is disabled entirely
-   * and the message says so instead of naming a track that still cannot be
-   * chosen from the row above it.
-   *
-   * Vocabulary (deck-floor addendum, D-09.26, independent of the blocked
-   * preset/threshold change — see file header): track length is «محطات»,
-   * never «خطوات».
+   * D-09.21…D-09.24 — every refusal carries the two numbers (how many more
+   * to be PLAYABLE, how many more to be COMFORTABLE), because the user's
+   * real question was «كيف كافية؟», not «هل يكفي؟» (field evidence,
+   * addendum §0). Both numbers come from `questionsNeededForPlayable`/
+   * `questionsNeededForComfortable` — the SAME `ceil(threshold) - D` the
+   * band check itself uses, so the promised count always actually flips
+   * the band (D-09.24).
    */
   function updateBandLine(): void {
     const band = deckBand(p.deckSize, selectedN);
     if (band === 'green') {
+      // §4 of the addendum, literal.
       bandLine.textContent = `أسئلتك ${formatDigits(p.deckSize)} — تكفي بارتياح لمسار ${formatDigits(selectedN)} محطات.`;
       confirmBtn.disabled = false;
     } else if (band === 'warn') {
-      bandLine.textContent = `أسئلتك ${formatDigits(p.deckSize)} — تكفي غالباً، وإذا كثرت الأخطاء ممكن تخلص الأسئلة قبل ما يوصل أحد`;
+      // §3 of the addendum, literal — the middle sentence states the
+      // CONSEQUENCE of running out (an ending, not a crash), then the
+      // comfort price.
+      const comfortMore = questionsNeededForComfortable(p.deckSize, selectedN);
+      bandLine.textContent = `أسئلتك ${formatDigits(p.deckSize)} — تكفي لمسار ${formatDigits(selectedN)} محطات. لو خلصت الأسئلة قبل ما يوصل أحد، يفوز المتقدّم. زد ${phrase(comfortMore)} وتلعب بارتياح.`;
       confirmBtn.disabled = false;
-    } else {
-      const bestN = maxGreenTrackLength(p.deckSize);
-      if (bestN >= smallestPreset) {
-        bandLine.textContent = `أسئلتك ${formatDigits(p.deckSize)} — تكفي لمسار ${formatDigits(bestN)} محطات`;
-      } else if (p.deckSize === 0) {
-        // Composed — no Appendix أ literal covers the zero-question case
-        // (D-25: this is now the default first experience, not an edge
-        // case). Disclosed in worklog-B5.md, not presented as scripted.
-        bandLine.textContent = 'لا توجد أسئلة بعد — أضف أسئلتك أولاً من «أسئلتي».';
-      } else {
-        bandLine.textContent = `أسئلتك ${formatDigits(p.deckSize)} — لا تكفي بعد لأي مسار. أضف المزيد من «أسئلتي».`;
-      }
+    } else if (p.deckSize === 0) {
+      // §2 of the addendum, unchanged/literal — the zero-question case is
+      // now the default first experience (D-25), not an edge case.
+      bandLine.textContent = 'لا توجد أسئلة بعد — أضف أسئلتك أولاً من «أسئلتي».';
       confirmBtn.disabled = true;
+    } else if (deckBand(p.deckSize, smallestPreset) === 'refuse') {
+      // §1 of the addendum, literal — below the floor of EVERY preset,
+      // including «سريعة». Both numbers computed against N=4, the
+      // smallest/fastest preset the copy names.
+      const r = questionsNeededForPlayable(p.deckSize, smallestPreset);
+      const g = questionsNeededForComfortable(p.deckSize, smallestPreset);
+      bandLine.textContent = `أسئلتك ${formatDigits(p.deckSize)} — ناقصك ${phrase(r)} عشان تبدأ لعبة «سريعة» (٤ محطات)، و${phrase(g)} عشان تلعب بارتياح.`;
+      confirmBtn.disabled = true;
+    } else {
+      // The deck supports a SHORTER preset than the one currently selected
+      // (F-3 fix lineage, worklog-B5.md) — name the largest one it truly
+      // supports rather than the refused selection itself.
+      const bestN = maxGreenTrackLength(p.deckSize);
+      bandLine.textContent =
+        bestN >= smallestPreset
+          ? `أسئلتك ${formatDigits(p.deckSize)} — تكفي لمسار ${formatDigits(bestN)} محطات.`
+          : `أسئلتك ${formatDigits(p.deckSize)} — لا تكفي بعد لأي مسار. أضف المزيد من «أسئلتي».`;
+      confirmBtn.disabled = true;
+    }
+  }
+
+  function refreshChipSublines(): void {
+    for (let i = 0; i < PRESETS.length; i++) {
+      const preset = PRESETS[i]!;
+      const sub = chipSubs[i];
+      if (sub) sub.textContent = chipSubline(deckBand(p.deckSize, preset), preset);
     }
   }
 
@@ -211,19 +230,21 @@ export function renderTeamSetupScreen(container: HTMLElement, p: TeamSetupParams
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'console-chip track-preset-button';
-    const bandForChip = deckBand(p.deckSize, preset.n);
+    const bandForChip = deckBand(p.deckSize, preset);
     const sub = document.createElement('span');
     sub.className = 'console-chip-sub';
-    sub.textContent = bandForChip === 'green' ? 'تكفي بارتياح' : bandForChip === 'warn' ? 'تكفي غالباً' : 'غير كافية';
+    sub.textContent = chipSubline(bandForChip, preset);
     const main = document.createElement('span');
-    main.textContent = `${preset.label} — ${formatDigits(preset.n)}`;
+    main.textContent = `${PRESET_LABELS[preset]} — ${formatDigits(preset)}`;
     btn.append(main, sub);
-    if (preset.n === selectedN) btn.classList.add('is-selected');
-    btn.addEventListener('click', () => selectPreset(preset.n, btn));
+    if (preset === selectedN) btn.classList.add('is-selected');
+    btn.addEventListener('click', () => selectPreset(preset, btn));
     chipRow.append(btn);
     chips.push(btn);
+    chipSubs.push(sub);
   }
   updateBandLine();
+  refreshChipSublines();
 
   column.append(title, fieldGrid, trackRow, bandLine);
   body.append(column);

@@ -366,7 +366,16 @@ async function run(browser, results) {
       const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       const seenQuestionTexts = new Set();
       let steps = 0;
-      const maxSteps = 600;
+      // B7 maze redesign (worklog-B7.md): each correct-answer beat now
+      // spends real wall-clock time in the arm delay (~400ms) and the
+      // auto-advance timer (~1200ms) with NOTHING to click during either
+      // window (this loop just polls every 60ms and waits) — a slower,
+      // deliberately paced cadence than the old immediate-manual-tap flow.
+      // 600 was tuned for the old cadence; real measurement this session
+      // (see worklog-B7.md §4) showed 20 distinct questions reached but
+      // NOT an ending within 600 steps, whereas 2400 comfortably finishes
+      // a قصيرة (N=6) game.
+      const maxSteps = 2400;
       // `data-option-index` values already tried AND FOUND WRONG for the
       // CURRENT question — reset whenever the question text changes.
       // Necessary because `optionOrder` is fixed for a question's whole
@@ -393,12 +402,20 @@ async function run(browser, results) {
         if (showOptionsBtn) { showOptionsBtn.click(); continue; }
         const banner = document.querySelector('.result-banner');
         if (banner && banner.classList.contains('is-correct')) {
-          const nextBtn = Array.from(document.querySelectorAll('button')).find((b) => b.textContent.trim() === 'السؤال التالي');
-          if (nextBtn) { nextBtn.click(); continue; }
+          // B7 maze redesign (worklog-B7.md): the plain "السؤال التالي"
+          // button on a CORRECT answer is now the route-card row (2-3
+          // cards, one per open exit) — click whichever is enabled (arm
+          // delay has a fixed 400ms window; `sleep(60)` above means this
+          // branch is revisited repeatedly until one arms).
+          const routeCard = document.querySelector('.route-card:not([disabled])');
+          if (routeCard) { routeCard.click(); continue; }
         }
         if (banner && banner.classList.contains('is-wrong')) {
           // Wrong: undo (pops ANSWER_CHOSEN back to QUESTION_SHOWN, same
-          // fixed optionOrder) and retry with an UNTRIED slot next pass.
+          // fixed optionOrder) and retry with an UNTRIED slot next pass —
+          // BEFORE the wrong-answer route-card ("السؤال التالي") would
+          // otherwise be clicked, preserving this script's own
+          // always-find-the-correct-slot strategy.
           const undoBtn = document.querySelector('.undo-corner button:not([disabled])');
           if (undoBtn) { undoBtn.click(); continue; }
         }

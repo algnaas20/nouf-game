@@ -70,12 +70,7 @@
     },
     {
       "file": "screens/team-setup.ts",
-      "literal": "إذا وصلوا النهاية سوا → سؤال الحسم",
-      "present": true
-    },
-    {
-      "file": "screens/team-setup.ts",
-      "literal": "تكفي غالباً، وإذا كثرت الأخطاء ممكن تخلص الأسئلة قبل ما يوصل أحد",
+      "literal": "لو خلصت الأسئلة قبل ما يوصل أحد، يفوز المتقدّم",
       "present": true
     },
     {
@@ -85,29 +80,17 @@
     },
     {
       "file": "screens/maze-view.ts",
-      "literal": "البداية",
-      "present": true
-    },
-    {
-      "file": "screens/maze-view.ts",
       "literal": "النهاية",
       "present": true
     }
   ],
   "deadEndStructure": {
-    "expectedStationCircles": 22,
-    "actualStationCircles": 22,
-    "deadEndCircleCount": 0,
-    "wallLineCount": 10,
-    "expectedWallLineCount": 10,
-    "stubPathCount": 5,
-    "expectedStubPathCount": 5,
-    "stationVsDeadEndCollisions": [],
-    "spineMonotonic": true
+    "superseded": true,
+    "reason": "D-24 / maze redesign 2026-08-08 — see worklog-B7.md §4"
   },
   "deadEndMutation": {
-    "beforeCount": 1,
-    "afterCount": 0
+    "superseded": true,
+    "reason": "D-24 / maze redesign 2026-08-08 — see worklog-B7.md §4"
   },
   "v13ControlSizes": {
     "rects": [
@@ -149,7 +132,7 @@
   },
   "v12Structural": {
     "dashArrayA": "none",
-    "dashArrayB": "14px, 10px",
+    "dashArrayB": "28px, 28px",
     "dashDiffers": true,
     "shapeA": "circle",
     "shapeB": "rect",

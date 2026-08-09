@@ -20,8 +20,20 @@
   /* Dark theme — measured palette, §7.2. Never #000 / #FFF (TV crush/bloom). */
   --color-bg: #0E1116;
   --color-text: #F2F4F7;
-  --color-team-a: #0072B2;
-  --color-team-b: #E69F00;
+  /*
+   * Team colours — rtl-stage-ux-expert addendum-maze-ux.md §2 (supersedes
+   * the old blue/orange pair — this redesign's trails are the PRIMARY
+   * readout, always both visible, running adjacent, so greyscale
+   * separation outranks aesthetic symmetry): A = Okabe-Ito yellow
+   * (14.30:1 vs bg), B = Okabe-Ito blue (3.65:1 vs bg). Greyscale
+   * separation between the two: 3.92:1 (measured, §2.1). `--color-team-b`
+   * is the thin number here — fixed STRUCTURALLY with `--color-trail-casing`
+   * below (4 stage-px near-white outline, 17.16:1 edge contrast regardless
+   * of fill, §2.3), never by hue-hunting.
+   */
+  --color-team-a: #F0E442;
+  --color-team-b: #0072B2;
+  --color-trail-casing: #F2F4F7;
   --color-correct: #009E73;
   --color-wrong: #D55E00;
 
@@ -37,6 +49,8 @@
   --size-operator-button: 44;
   --size-result-word: 96;
   --size-winner-headline: 120;
+  /* addendum §1.5: route-card label >= 56 stage-px. */
+  --size-route-card: 56;
 
   /* Safe area, §1.7 — 5% overscan inset. Layout-fixed: does NOT scale with --scale-step. */
   --safe-inline: 96;

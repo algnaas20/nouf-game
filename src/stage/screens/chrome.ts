@@ -150,6 +150,77 @@ export function buildDeciderBadge(): HTMLElement {
   return badge;
 }
 
+/**
+ * game-systems-expert 2026-08-08 §7 / rtl-stage-ux-expert addendum-maze-ux.md
+ * §1 — the route tap. One card per candidate `MOVE_APPLIED` event: a
+ * correct answer yields 2-3 (one per open exit, R-1's أ/ب/ج convention,
+ * `letterChip` set); a wrong answer / already-at-goal yields exactly one,
+ * «السؤال التالي» (`letterChip` unset — same visual family as the old
+ * single next-button, never styled like a route choice).
+ */
+export interface RouteOption {
+  key: string;
+  label: string;
+  letterChip?: string;
+  onSelect: () => void;
+}
+
+/** Addendum §1.5: cards are inert for ~400ms after this band mounts —
+ *  declared interpretation (worklog-B7.md §2): measured from mount, since
+ *  no token animation is ever mid-flight at the instant these cards first
+ *  appear (the token-run animation happens strictly AFTER a card is
+ *  tapped, on the next screen — `maze-beat.ts`). Prevents the residual
+ *  momentum of tap 1 (the answer tap, which just fired the reveal this
+ *  band appears under) from landing on tap 2. */
+export const ROUTE_CARD_ARM_DELAY_MS = 400;
+
+/**
+ * The fixed action band (addendum §1.5): same 160-stage-px band, same
+ * vertical position, every beat, every outcome (V33 — action-band
+ * invariance) — only the card count and labels change. Never placed on the
+ * maze itself (V36 — the board is never a tap target; it only labels and
+ * highlights the mouths, `maze-view.ts`'s ADJACENT register).
+ */
+export function buildRouteActionBand(options: readonly RouteOption[]): HTMLElement {
+  const band = document.createElement('div');
+  band.className = 'route-action-band';
+  const row = document.createElement('div');
+  row.className = 'route-card-row';
+  row.style.setProperty('--route-card-count', String(options.length));
+
+  const buttons: HTMLButtonElement[] = [];
+  for (const opt of options) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'route-card' + (opt.letterChip ? '' : ' route-card-solo');
+    btn.dataset.routeKey = opt.key;
+    btn.disabled = true; // armed below, after ROUTE_CARD_ARM_DELAY_MS.
+    if (opt.letterChip) {
+      const chip = document.createElement('span');
+      chip.className = 'route-card-letter';
+      chip.textContent = opt.letterChip;
+      btn.append(chip);
+    }
+    const label = document.createElement('span');
+    label.className = 'route-card-label type-route-card';
+    label.textContent = opt.label;
+    btn.append(label);
+    btn.addEventListener('click', () => {
+      if (btn.disabled) return;
+      opt.onSelect();
+    });
+    row.append(btn);
+    buttons.push(btn);
+  }
+  band.append(row);
+
+  window.setTimeout(() => {
+    for (const btn of buttons) btn.disabled = false;
+  }, ROUTE_CARD_ARM_DELAY_MS);
+
+  return band;
+}
+
 export interface OperatorBarParams {
   /** Extra type-specific controls (volume, أعِد التشغيل, اعرض الخيارات),
    *  placed at the inline-start end of the bar — always present, never
@@ -158,39 +229,36 @@ export interface OperatorBarParams {
   revealed: boolean;
   noAnswerDisabled?: boolean;
   onNoAnswer: () => void;
-  onNext: () => void;
+  /** Required when `revealed` is true — the route action band's cards
+   *  (`buildRouteActionBand` above). Ignored pre-reveal. */
+  moveOptions?: RouteOption[];
 }
 
-/** «لم يجيبوا» (pre-reveal) / «السؤال التالي» (post-reveal), plus any
- *  type-specific extra controls — the full operator bar shared by every
- *  question screen type. */
+/** «لم يجيبوا» (pre-reveal, 104 stage-px band, unchanged) / the fixed route
+ *  action band (post-reveal, 160 stage-px, invariant — V33), plus any
+ *  type-specific extra controls — shared by every question screen type. */
 export function buildOperatorBar(p: OperatorBarParams): HTMLElement {
   const bar = document.createElement('div');
-  bar.className = 'operator-bar';
+  bar.className = p.revealed ? 'operator-bar operator-bar-revealed' : 'operator-bar';
 
   const barStart = document.createElement('div');
   barStart.className = 'operator-bar-start';
   for (const el of p.extraButtons ?? []) barStart.append(el);
 
+  if (p.revealed) {
+    bar.append(barStart, buildRouteActionBand(p.moveOptions ?? []));
+    return bar;
+  }
+
   const barEnd = document.createElement('div');
   barEnd.className = 'operator-bar-end';
-
-  if (p.revealed) {
-    const nextBtn = document.createElement('button');
-    nextBtn.type = 'button';
-    nextBtn.className = 'op-button primary type-operator-button';
-    nextBtn.textContent = 'السؤال التالي';
-    nextBtn.addEventListener('click', p.onNext);
-    barEnd.append(nextBtn);
-  } else {
-    const noAnswerBtn = document.createElement('button');
-    noAnswerBtn.type = 'button';
-    noAnswerBtn.className = 'op-button type-operator-button';
-    noAnswerBtn.textContent = 'لم يجيبوا';
-    noAnswerBtn.disabled = Boolean(p.noAnswerDisabled);
-    noAnswerBtn.addEventListener('click', p.onNoAnswer);
-    barEnd.append(noAnswerBtn);
-  }
+  const noAnswerBtn = document.createElement('button');
+  noAnswerBtn.type = 'button';
+  noAnswerBtn.className = 'op-button type-operator-button';
+  noAnswerBtn.textContent = 'لم يجيبوا';
+  noAnswerBtn.disabled = Boolean(p.noAnswerDisabled);
+  noAnswerBtn.addEventListener('click', p.onNoAnswer);
+  barEnd.append(noAnswerBtn);
 
   bar.append(barStart, barEnd);
   return bar;

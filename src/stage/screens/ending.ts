@@ -2,16 +2,27 @@ import type { TeamId } from '../../contracts';
 import { formatDigits } from '../format-digits';
 import { buildUndoCorner } from '../undo-corner';
 
+export type EndReason = 'track' | 'progress' | 'stations';
+
 export interface EndingScreenParams {
   teamNames: [string, string];
   positions: [number, number];
   N: number;
   outcome: 'winA' | 'winB' | 'draw';
-  /** Whether either team actually reached the last station — distinguishes
-   *  a track win (D-09.7/9, plain "فاز فريق ⟨أ⟩") from an exhaustion-with-
-   *  progress win (D-09.14, the literal "بالتقدّم" wording), per
-   *  resolveProgression's own two GAME_ENDED sources. */
-  reachedEnd: boolean;
+  /**
+   * Which of `resolveProgression`'s exhaustion-branch paths produced this
+   * win (§10's §6.3 amendment, play-experience-advisor's
+   * addendum-deck-floor-2026-08-08.md D-09.27) — computed by `app.ts` from
+   * `state.positions`, never re-derived here:
+   *   'track'    — someone actually reached the last station (D-09.7/9,
+   *                plain "فاز فريق ⟨أ⟩").
+   *   'progress' — deck exhausted, positions differ (D-09.14, "بالتقدّم").
+   *   'stations' — deck exhausted, positions EQUAL but correct-answer
+   *                counts differ (the §6.3 amendment — only possible now
+   *                that a dead end can cost a team a move without a rival
+   *                also losing one; D-09.27's literal copy).
+   */
+  endReason: EndReason;
   nextFirstTeam: TeamId;
   canUndo: boolean;
   onNewGame: () => void;
@@ -80,10 +91,17 @@ export function renderEndingScreen(container: HTMLElement, p: EndingScreenParams
     }
     screen.append(confetti);
 
-    if (p.reachedEnd) {
+    if (p.endReason === 'track') {
       // Plain literal from the narrative ("فاز فريق النخبة") — no track/
       // tiebreak distinction is called out in Appendix أ's table.
       headline.textContent = `فاز فريق ${p.teamNames[winnerIdx]}`;
+      screen.append(headline, scoreLine);
+    } else if (p.endReason === 'stations') {
+      // §6.3 amendment (game-systems-expert 2026-08-08) + D-09.27, literal
+      // copy from play-experience-advisor's addendum-deck-floor-2026-08-08.md:
+      // «نفس الخطوات» would be FALSE under the wasted-move model — the
+      // loser did not take the same number of moves, they stumbled once.
+      headline.textContent = `فاز فريق ${p.teamNames[winnerIdx]} — وصلوا نفس المحطة، وإجاباتهم الصحيحة أكثر.`;
       screen.append(headline, scoreLine);
     } else {
       // D-09.14, literal: «فاز فريق ⟨أ⟩ بالتقدّم — ٧ مقابل ٥».

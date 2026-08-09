@@ -8,6 +8,7 @@ import {
   buildOptionsGrid,
   buildResultBanner,
   buildOperatorBar,
+  type RouteOption,
 } from './chrome';
 
 export interface TextQuestionScreenParams {
@@ -21,7 +22,7 @@ export interface TextQuestionScreenParams {
   canUndo: boolean;
   onChoose: (optionIndex: OptionIndex) => void;
   onNoAnswer: () => void;
-  onNext: () => void;
+  moveOptions: RouteOption[];
   onUndo: () => void;
 }
 
@@ -73,7 +74,7 @@ export function renderTextQuestionScreen(container: HTMLElement, p: TextQuestion
       revealed: p.revealed,
       noAnswerDisabled: p.revealed,
       onNoAnswer: p.onNoAnswer,
-      onNext: p.onNext,
+      moveOptions: p.moveOptions,
     }),
   );
   safe.append(buildUndoCorner(p.canUndo, p.onUndo));

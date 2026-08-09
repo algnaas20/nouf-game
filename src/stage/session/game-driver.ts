@@ -14,10 +14,14 @@
  * that guard.
  */
 
-import type { GameEvent, GameState, Outcome, Question, TeamId } from '../../contracts';
+import type { GameEvent, GameState, MoveAppliedEvent, Outcome, Question, TeamId } from '../../contracts';
 import { fold, undo as coreUndo, commit as coreCommit } from '../../core/fold';
 import { legalEvents, type GameContext } from '../../core/legal';
 import { saveSession } from '../../core/session-store';
+// game-systems-expert 2026-08-08 §10.1/M-RESUME-1 — pins the maze generator
+// version on every `GAME_STARTED`, same refuse-on-mismatch treatment as
+// `deckHash` (WL-A's `checkResume`, `src/core/session-store.ts`).
+import { MAZE_GEN_VERSION } from '../../core/rules/maze';
 
 export interface StartParams {
   teamNames: [string, string];
@@ -111,6 +115,7 @@ export class GameDriver {
       teamNames: params.teamNames,
       firstTeam: params.firstTeam,
       deckHash: params.deckHash,
+      mazeGenVersion: MAZE_GEN_VERSION,
     };
     this.commit(event);
   }
@@ -179,8 +184,23 @@ export function findNoAnswer(candidates: readonly GameEvent[]): GameEvent | unde
   return candidates.find((e) => e.type === 'NO_ANSWER');
 }
 
-export function findMoveApplied(candidates: readonly GameEvent[]): GameEvent | undefined {
-  return candidates.find((e) => e.type === 'MOVE_APPLIED');
+/**
+ * game-systems-expert 2026-08-08 §7/§10.4: `legalEvents` at `ANSWER_REVEALED`
+ * now offers ONE `MOVE_APPLIED` candidate per open exit when the last answer
+ * was correct (2 or 3, per `availableExits`), or exactly ONE candidate with
+ * `exit: null` when it was wrong / already at goal. This is the plural
+ * replacement for the old single-candidate `findMoveApplied` (superseded —
+ * the old M1 model always had exactly one `MOVE_APPLIED` candidate, so a
+ * single `find` was correct then and is not anymore).
+ */
+export function findAllMoveApplied(candidates: readonly GameEvent[]): MoveAppliedEvent[] {
+  return candidates.filter((e): e is MoveAppliedEvent => e.type === 'MOVE_APPLIED');
+}
+
+/** The single wrong-answer / already-at-goal candidate (`exit: null`) — the
+ *  route-band's one-card «السؤال التالي» case. */
+export function findNoMoveApplied(candidates: readonly GameEvent[]): MoveAppliedEvent | undefined {
+  return candidates.find((e): e is MoveAppliedEvent => e.type === 'MOVE_APPLIED' && e.exit === null);
 }
 
 export function findTurnPassed(candidates: readonly GameEvent[]): GameEvent | undefined {

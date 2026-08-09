@@ -1,0 +1,65 @@
+{
+  "reachedCorrectRouteCards": true,
+  "V32_routeCardGeometry": {
+    "unit": 1,
+    "count": 3,
+    "widthsStagePx": [
+      424,
+      424,
+      424
+    ],
+    "heightsStagePx": [
+      140,
+      140,
+      140
+    ],
+    "gapsStagePx": [
+      48,
+      48
+    ],
+    "labelStagePx": 56,
+    "bandTop": 866,
+    "bandHeightStagePx": 160
+  },
+  "V32_pass": {
+    "widthsOk": true,
+    "heightsOk": true,
+    "gapsOk": true,
+    "labelOk": true,
+    "bandHeightOk": true
+  },
+  "V34_armDelay": {
+    "disabledRightAfterMount": true,
+    "enabledAfterDelay": true
+  },
+  "I15_noDeadEndLeak": {
+    "suspectCount": 0
+  },
+  "V31_trailGeometry": {
+    "coreWidthA": "20px",
+    "coreWidthB": "20px",
+    "casingWidthA": "28px",
+    "dashArrayB": "28px, 28px",
+    "dashArrayA": "none",
+    "colorA": "rgb(240, 228, 66)",
+    "colorB": "rgb(0, 114, 178)"
+  },
+  "V33_actionBandInvariance": {
+    "correctBandTop": 866,
+    "wrongBandTop": 866,
+    "diffPx": 0
+  },
+  "V29_greyscaleSeparation": {
+    "teamHexes": {
+      "a": "#F0E442",
+      "b": "#0072B2"
+    },
+    "la": 0.7440541760414299,
+    "lb": 0.15248980125973846,
+    "ratio": 3.9214526909573966,
+    "pass": true
+  },
+  "V36_noMazeClickHandlers": {
+    "addEventListenerCount": 0
+  }
+}

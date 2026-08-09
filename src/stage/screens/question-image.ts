@@ -8,6 +8,7 @@ import {
   buildOptionsGrid,
   buildResultBanner,
   buildOperatorBar,
+  type RouteOption,
 } from './chrome';
 
 export interface ImageQuestionScreenParams {
@@ -24,7 +25,7 @@ export interface ImageQuestionScreenParams {
   setMediaUi: (patch: Partial<MediaUiState>) => void;
   onChoose: (optionIndex: OptionIndex) => void;
   onNoAnswer: () => void;
-  onNext: () => void;
+  moveOptions: RouteOption[];
   onUndo: () => void;
 }
 
@@ -109,7 +110,7 @@ export function renderImageQuestionScreen(container: HTMLElement, p: ImageQuesti
         revealed: false,
         noAnswerDisabled: true,
         onNoAnswer: () => {},
-        onNext: () => {},
+        moveOptions: [],
       }),
     );
   } else {
@@ -170,7 +171,7 @@ export function renderImageQuestionScreen(container: HTMLElement, p: ImageQuesti
         revealed: p.revealed,
         noAnswerDisabled: p.revealed,
         onNoAnswer: p.onNoAnswer,
-        onNext: p.onNext,
+        moveOptions: p.moveOptions,
       }),
     );
 

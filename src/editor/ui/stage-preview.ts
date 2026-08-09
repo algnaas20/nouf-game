@@ -172,9 +172,14 @@ export function openStagePreview(options: StagePreviewOptions): StagePreviewHand
       onNoAnswer: () => {
         /* inert preview */
       },
-      onNext: () => {
-        /* inert preview */
-      },
+      // WL-B contract change (worklog-B7.md): `onNext` -> `moveOptions`
+      // (game-systems-expert 2026-08-08 §7, the route action band). The
+      // preview always renders pre-reveal (`revealed: false`), so this is
+      // never read — kept as an empty array for the same "inert preview"
+      // reason the callbacks above are no-ops. Minimal, contained edit to
+      // this ONE call site, made necessary by the shared contract change;
+      // `src/editor/**` ownership is otherwise untouched (WL-C's file).
+      moveOptions: [],
       onUndo: () => {
         /* inert preview */
       },

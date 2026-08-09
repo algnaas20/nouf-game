@@ -9,6 +9,7 @@ import {
   buildOptionsGrid,
   buildResultBanner,
   buildOperatorBar,
+  type RouteOption,
 } from './chrome';
 
 export interface AudioQuestionScreenParams {
@@ -25,7 +26,7 @@ export interface AudioQuestionScreenParams {
   setMediaUi: (patch: Partial<MediaUiState>) => void;
   onChoose: (optionIndex: OptionIndex) => void;
   onNoAnswer: () => void;
-  onNext: () => void;
+  moveOptions: RouteOption[];
   onUndo: () => void;
 }
 
@@ -332,7 +333,7 @@ export function renderAudioQuestionScreen(container: HTMLElement, p: AudioQuesti
       revealed: p.revealed,
       noAnswerDisabled: p.revealed,
       onNoAnswer: p.onNoAnswer,
-      onNext: p.onNext,
+      moveOptions: p.moveOptions,
     }),
   );
   safe.append(buildUndoCorner(p.canUndo, p.onUndo));
