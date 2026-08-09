@@ -2,10 +2,10 @@
 // Regenerated on every "npm run build"; CACHE_NAME changes every time
 // (static-delivery-investigation.md §6.2 rule 1 — a fixed cache name is the
 // classic permanent-stale bug).
-const CACHE_NAME = "nouf-shell-0.0.0-20260808193205-970492";
-const RUNTIME_CACHE_NAME = "nouf-runtime-media-0.0.0-20260808193205-970492";
+const CACHE_NAME = "nouf-shell-0.0.0-20260809051806-246de9";
+const RUNTIME_CACHE_NAME = "nouf-runtime-media-0.0.0-20260809051806-246de9";
 const RUNTIME_CACHE_MAX_ENTRIES = 200;
-const PRECACHE_URLS = ["./manifest.webmanifest","./robots.txt","./icons/favicon.svg","./assets/cairo-arabic-hmgdcmfj.woff2","./assets/index-f1eyw1qd.js","./assets/index-lvj7n1ug.css"];
+const PRECACHE_URLS = ["./manifest.webmanifest","./robots.txt","./icons/favicon.svg","./assets/cairo-arabic-hmgdcmfj.woff2","./assets/index-ezf4hsv8.css","./assets/index-pe7rlpan.js"];
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
