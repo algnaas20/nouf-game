@@ -125,3 +125,44 @@ Grepped `src/editor/**` for any literal preset list (`قصيرة`/`عادية`/`
 ### Close-out (second pass)
 
 Dev server on :3013 stopped and port confirmed free again. `git status --short`: only the files listed in the fixes/additions table above, plus regenerated live-script screenshots/JSON (legitimate re-run evidence, not stray). Not committed — coordinator commits.
+
+---
+
+## 7. The disclosed T1-reminder bug — fixed, not left for later (coordinator follow-up, 2026-08-09)
+
+Coordinator, after committing §6 as `0d85e25`: fix the AC3a/AC4 finding rather than leave it, since a reminder that fires with nothing to lose and stays silent after a real loss trains the host to ignore the one guardrail against losing an evening of work. Correctly pointed at the likely shape of the bug: "the state is probably there and only the display predicate is wrong — confirm rather than assume."
+
+**Confirmed rather than assumed.** Read `draft-store.ts`'s `hasUnsavedChanges()` in full first: `meta === null → false`; else `meta.updatedAt > max(lastBackupAt ?? 0, lastPublishAt ?? 0)`. Correct on inspection — `recordBackup`/`recordPublish` both stamp their own `*At` fields and deliberately never touch `updatedAt` (the file's own comment: "that field means content last changed, not backup last taken — `hasUnsavedChanges()` depends on keeping the two independent"). So the state layer was not the suspect.
+
+Wrote a throwaway diagnostic (`tests/editor/diagnose-reminder-hidden.manual.cjs`, since deleted) that opened the editor fresh and read `{ hiddenAttr: el.hidden, computedDisplay: getComputedStyle(el).display, visibleRect }` directly from the live DOM for `.session-end-reminder` and `.storage-full-banner`. Result: `hiddenAttr: true` but `computedDisplay: "flex"` and `visibleRect: true` for **both** — confirmed, not assumed: the `hidden` IDL property was being set correctly by `backup-badge.ts`/`storage-full-banner.ts`, and the browser was ignoring it.
+
+**Root cause: the exact same cascade-defeat bug already found and fixed once tonight for `.editor-sticky-bar[hidden]` (§2), recurring in a different rule I wrote in the same Tier-3 CSS pass.** `editor.css`'s "Banners / prompts" block sets `.storage-full-banner, .return-prompt, .backup-badge-area, .session-end-reminder { display: flex; ... }` — an author-stylesheet rule at the same specificity as the user-agent's `[hidden] { display: none }` default. Per the cascade, author origin wins regardless of specificity, so `element.hidden = true` had zero visible effect on the two of those four selectors that actually toggle `hidden` (`.storage-full-banner` via `setStorageFullBannerVisible`, `.session-end-reminder` via `backup-badge.ts`'s `render`). `.return-prompt` is `.remove()`d rather than hidden, and `.backup-badge-area` is never hidden, so neither needed the fix. I did not catch this the first time because jsdom (vitest's unit-test environment) does not apply imported CSS the way a real browser does — only a real-browser live check could have caught it, which is exactly why it surfaced in `preview-readiness-backup.ts` and nowhere in the 128-test vitest suite.
+
+**Fix**: `src/editor/editor.css` — added `.storage-full-banner[hidden], .session-end-reminder[hidden] { display: none; }` immediately after the flex rule, scoped to only the two selectors that actually need it (not blanket-applied to the group), with a comment naming the mechanism so it is not silently reintroduced a third time.
+
+### Red→green, the actual predicate this time
+
+Diagnostic re-run after the fix: both elements now report `computedDisplay: "none"`, `visibleRect: false` while `hiddenAttr: true` — cascade defeat closed.
+
+Extended `tests/editor/live/preview-readiness-backup.ts` (already covered fresh/dirty/clean) with the missing fourth case the coordinator asked for — a further edit *after* a clean backup must bring the reminder back, proving it is not a one-shot "cleared forever" flag:
+
+| Case | Before fix | After fix |
+|---|---|---|
+| 1. Fresh, empty draft — reminder hidden | **FAILED** — shown | PASSED — hidden |
+| 2. Draft with unsaved changes — reminder shown | passed (display was already `flex`, coincidentally correct for this one case) | PASSED |
+| 3. Backup taken — reminder clears | **FAILED** — stayed shown | PASSED — hidden |
+| 4. Further edit after the backup — reminder returns | *(not previously tested)* | PASSED — shown again |
+
+Full run, `npx tsx tests/editor/live/preview-readiness-backup.ts`, real Chromium + real IndexedDB: **`ALL PH-C3 LIVE SCENARIOS PASSED`** (every AC in the file, not only the T1 cases).
+
+### Full verification re-run after the fix
+
+- `npx tsc --noEmit` — unchanged: the same single pre-existing `game-driver.ts` error (WL-B's, `mazeGenVersion`), zero in anything I touched.
+- `npx vitest run` — 23 files / **128 tests** passed (CSS-only fix; no unit test surface changed).
+- `npm run build` — clean, PH-D1 gates 0 violations.
+- `node tests/editor/live-tier3-reachability.manual.cjs` — still `OVERALL_PASS: true` (the banner/reminder fix does not touch the reachability surface, but re-run to be sure a shared stylesheet edit did not regress it).
+- `npx tsx tests/editor/live/preview-readiness-backup.ts` — **all scenarios pass**, see above.
+
+### Close-out (third pass)
+
+Diagnostic script deleted after use (not a standing check — the standing check remains `live-tier3-reachability.manual.cjs`; this fourth-case proof lives permanently in the extended `preview-readiness-backup.ts`). Dev server on :3013 stopped, port confirmed free. Not committed — coordinator commits.

@@ -156,11 +156,35 @@ async function main(): Promise<void> {
     // ===============================================================
     // AC4 (case 2 — clean) — T1 reminder NOT shown once saved
     // ===============================================================
-    console.log('\n=== AC4 (case 2/2) — T1 reminder hidden once there are no unsaved changes ===');
+    console.log('\n=== AC4 (case 2/3) — T1 reminder hidden once there are no unsaved changes ===');
     const cleanReminderHidden = await page.locator('.session-end-reminder').isHidden();
     console.log('  T1 reminder hidden (expected true — just saved, no new edits):', cleanReminderHidden);
     if (!cleanReminderHidden) fail('AC4 (clean case)', 'T1 reminder still shown after a clean save');
-    else console.log('AC4 (clean case) PASSED — both T1 cases proven live.');
+    else console.log('AC4 (clean case) PASSED.');
+
+    // ===============================================================
+    // AC4 (case 3 — dirty again) — a further edit AFTER a clean backup
+    // must bring the T1 reminder BACK. Coordinator follow-up, 2026-08-09:
+    // the reminder must never train the host to ignore it — it has to
+    // reappear the moment there is something new to lose, not stay
+    // permanently cleared after the first save.
+    // ===============================================================
+    console.log('\n=== AC4 (case 3/3) — T1 reminder returns after a further edit past the backup ===');
+    await page.click('#editor-add-question');
+    await page.fill('.question-text-input', 'سؤال ثانٍ بعد الحفظ');
+    const secondOptionInputs = page.locator('.option-text-input');
+    const secondOptions = ['أ', 'ب', 'ج', 'د'];
+    for (let i = 0; i < 4; i += 1) await secondOptionInputs.nth(i).fill(secondOptions[i]!);
+    await page.locator('.option-correct-radio').nth(0).check();
+    await page.click('.question-submit');
+    await page.waitForSelector('.question-card >> nth=1');
+    const reappearedReminderVisible = await page.locator('.session-end-reminder').isVisible();
+    console.log('  T1 reminder visible again (expected true — edited after the backup):', reappearedReminderVisible);
+    if (!reappearedReminderVisible) {
+      fail('AC4 (dirty-again case)', 'T1 reminder did NOT return after an edit past the last backup — a cleared reminder that never comes back trains the host to ignore it');
+    } else {
+      console.log('AC4 (dirty-again case) PASSED — all three T1 cases proven live: fresh (hidden), dirty (shown), saved (hidden), edited-again (shown).');
+    }
 
     // ===============================================================
     // AC3c — publish boundary (recordPublish), badge shows "published"
